@@ -1,0 +1,155 @@
+.image-cropper-overlay {
+  position: fixed;
+  top: 0;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  background: rgba(0, 0, 0, 0.7);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  z-index: 2000;
+  padding: 2rem;
+}
+
+.image-cropper-container {
+  background: var(--card-bg);
+  border-radius: 16px;
+  padding: 2rem;
+  max-width: 600px;
+  width: 100%;
+  box-shadow: 0 8px 32px rgba(0, 0, 0, 0.3);
+}
+
+.image-cropper-container h3 {
+  color: var(--primary-color);
+  margin-bottom: 0.5rem;
+  font-size: 1.5rem;
+}
+
+.cropper-instructions {
+  color: var(--text-light);
+  font-size: 0.9rem;
+  margin-bottom: 1.5rem;
+  text-align: center;
+}
+
+.cropper-preview-container {
+  position: relative;
+  width: 100%;
+  height: 400px;
+  background: #f0f0f0;
+  border-radius: 8px;
+  overflow: hidden;
+  cursor: move;
+  margin-bottom: 1.5rem;
+  border: 2px solid var(--border-color);
+  user-select: none;
+  -webkit-user-select: none;
+}
+
+.cropper-image-wrapper {
+  position: absolute;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  pointer-events: none;
+}
+
+.cropper-source-image {
+  max-width: none;
+  max-height: none;
+  display: block;
+  user-select: none;
+  pointer-events: none;
+}
+
+.cropper-overlay-circle {
+  position: absolute;
+  width: 200px;
+  height: 200px;
+  border: 3px solid var(--primary-color);
+  border-radius: 50%;
+  box-shadow: 
+    0 0 0 9999px rgba(0, 0, 0, 0.5),
+    0 0 0 3px var(--accent-color);
+  z-index: 10;
+  cursor: grab;
+  transition: transform 0.1s ease;
+}
+
+.cropper-overlay-circle:hover {
+  transform: scale(1.02);
+}
+
+.cropper-overlay-circle:active {
+  cursor: grabbing;
+}
+
+.cropper-controls {
+  display: flex;
+  gap: 1rem;
+  justify-content: flex-end;
+}
+
+.cancel-crop-button {
+  background: var(--text-light);
+  color: white;
+  border: none;
+  padding: 0.75rem 1.5rem;
+  border-radius: 8px;
+  font-size: 1rem;
+  font-weight: 600;
+  cursor: pointer;
+  transition: all 0.3s ease;
+}
+
+.cancel-crop-button:hover {
+  background: var(--text-color);
+  transform: translateY(-2px);
+  box-shadow: var(--shadow);
+}
+
+.apply-crop-button {
+  background: var(--success-color);
+  color: white;
+  border: none;
+  padding: 0.75rem 1.5rem;
+  border-radius: 8px;
+  font-size: 1rem;
+  font-weight: 600;
+  cursor: pointer;
+  transition: all 0.3s ease;
+}
+
+.apply-crop-button:hover {
+  background: #45a049;
+  transform: translateY(-2px);
+  box-shadow: var(--shadow);
+}
+
+@media (max-width: 768px) {
+  .image-cropper-container {
+    padding: 1.5rem;
+    margin: 1rem;
+  }
+
+  .cropper-preview-container {
+    height: 300px;
+  }
+
+  .cropper-overlay-circle {
+    width: 150px;
+    height: 150px;
+  }
+
+  .cropper-controls {
+    flex-direction: column;
+  }
+
+  .cancel-crop-button,
+  .apply-crop-button {
+    width: 100%;
+  }
+}
+
