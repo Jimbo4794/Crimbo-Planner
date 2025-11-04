@@ -826,26 +826,17 @@ function StorageManagement({ rsvps, menuCategories, tablesCount, seatsPerTable, 
   }
 
   const getStorageInfo = () => {
+    // Calculate approximate size from current data
     try {
-      let totalSize = 0
-      const keys = [
-        'crimbo-planner-rsvps',
-        'crimbo-planner-menu',
-        'crimbo-planner-tables-count',
-        'crimbo-planner-seats-per-table'
-      ]
-
-      keys.forEach(key => {
-        const value = localStorage.getItem(key)
-        if (value) {
-          totalSize += new Blob([value]).size
-        }
-      })
+      const rsvpsSize = new Blob([JSON.stringify(rsvps)]).size
+      const menuSize = new Blob([JSON.stringify(menuCategories)]).size
+      const configSize = new Blob([JSON.stringify({ tablesCount, seatsPerTable })]).size
+      const totalSize = rsvpsSize + menuSize + configSize
 
       return {
         totalSize,
         totalSizeKB: (totalSize / 1024).toFixed(2),
-        itemCount: keys.length
+        itemCount: 3
       }
     } catch (error) {
       return { totalSize: 0, totalSizeKB: '0', itemCount: 0 }
@@ -861,7 +852,7 @@ function StorageManagement({ rsvps, menuCategories, tablesCount, seatsPerTable, 
       <div className="storage-info">
         <h4>Current Storage</h4>
         <p className="storage-stats">
-          <strong>Storage Location:</strong> Browser localStorage<br />
+          <strong>Storage Location:</strong> Server container (persistent)<br />
           <strong>Data Size:</strong> {storageInfo.totalSizeKB} KB<br />
           <strong>RSVPs:</strong> {rsvps.length}<br />
           <strong>Menu Categories:</strong> {menuCategories.length}<br />

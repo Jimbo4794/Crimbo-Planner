@@ -23,17 +23,33 @@ ENV VITE_ADMIN_PASSWORD=${VITE_ADMIN_PASSWORD}
 RUN npm run build
 
 # Production stage
-FROM nginx:alpine
+FROM node:18-alpine
+
+# Set working directory
+WORKDIR /app
+
+# Copy package files
+COPY package.json package-lock.json* ./
+
+# Install production dependencies only
+RUN npm ci --production
 
 # Copy built assets from builder stage
-COPY --from=builder /app/dist /usr/share/nginx/html
+COPY --from=builder /app/dist ./dist
 
-# Copy custom nginx configuration
-COPY nginx.conf /etc/nginx/conf.d/default.conf
+# Copy server file
+COPY server.js ./
+
+# Create data directory for persistent storage
+RUN mkdir -p /app/data
 
 # Expose port 80
 EXPOSE 80
 
-# Start nginx
-CMD ["nginx", "-g", "daemon off;"]
+# Set environment variable for data directory
+ENV DATA_DIR=/app/data
+ENV PORT=80
+
+# Start the server
+CMD ["node", "server.js"]
 

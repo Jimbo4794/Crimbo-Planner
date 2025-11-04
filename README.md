@@ -69,17 +69,17 @@ docker build -t crimbo-planner --build-arg VITE_ADMIN_PASSWORD=your-secure-passw
 docker build -t crimbo-planner .
 ```
 
-2. Run the container:
+2. Run the container with persistent data storage:
 ```bash
 docker run -d -p 8080:80 --name crimbo-planner \
-  -v $(pwd)/data:/usr/share/nginx/html/data \
+  -v crimbo-planner-data:/app/data \
   crimbo-planner
 ```
 
-   Or with a named volume for persistent data:
+   Or mount a local directory:
 ```bash
 docker run -d -p 8080:80 --name crimbo-planner \
-  -v crimbo-planner-data:/usr/share/nginx/html/data \
+  -v $(pwd)/data:/app/data \
   crimbo-planner
 ```
 
@@ -103,11 +103,21 @@ docker-compose down
 
 The Docker image uses a multi-stage build:
 - **Build stage**: Uses Node.js to build the React application
-- **Production stage**: Uses nginx to serve the static files
+- **Production stage**: Uses Node.js with Express to serve the application and API
 
-**Note**: Since this app uses browser localStorage for data storage, data is stored in the user's browser and is not persisted in the container. To persist data across sessions, use the export/import features in the Admin panel.
+For development, you'll need to run both the frontend dev server and the backend API server:
+1. Start the backend API: `npm run dev:server` (runs on port 3000)
+2. Start the frontend dev server: `npm run dev` (runs on port 5173)
 
-The volume mount (`-v`) option creates a persistent directory on your host machine where exported data files can be saved. This is useful for backing up RSVP data and configuration exports.
+**Note**: Data is now persisted in the container's `/app/data` directory as JSON files. To persist data across container restarts, mount a volume to `/app/data`:
+
+```bash
+docker run -d -p 8080:80 --name crimbo-planner \
+  -v crimbo-planner-data:/app/data \
+  crimbo-planner
+```
+
+This will create a named volume that persists data even if the container is removed.
 
 ## Usage
 

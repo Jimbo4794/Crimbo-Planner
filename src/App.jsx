@@ -3,12 +3,9 @@ import MainMenu from './components/MainMenu'
 import RSVPForm from './components/RSVPForm'
 import SeatSelection from './components/SeatSelection'
 import Admin from './components/Admin'
+import { fetchRSVPs, saveRSVPs, fetchMenu, saveMenu, fetchConfig, saveConfig } from './api'
 import './App.css'
 
-const STORAGE_KEY = 'crimbo-planner-rsvps'
-const MENU_STORAGE_KEY = 'crimbo-planner-menu'
-const TABLES_COUNT_STORAGE_KEY = 'crimbo-planner-tables-count'
-const SEATS_PER_TABLE_STORAGE_KEY = 'crimbo-planner-seats-per-table'
 const DEFAULT_TABLES_COUNT = 5
 const DEFAULT_SEATS_PER_TABLE = 8
 
@@ -42,112 +39,76 @@ const DEFAULT_MENU_CATEGORIES = [
   }
 ]
 
-// Load menu categories from localStorage
-const loadMenuFromStorage = () => {
-  try {
-    const stored = localStorage.getItem(MENU_STORAGE_KEY)
-    if (stored) {
-      return JSON.parse(stored)
-    }
-  } catch (error) {
-    console.error('Error loading menu from localStorage:', error)
-  }
-  return DEFAULT_MENU_CATEGORIES
-}
-
-// Load tables count from localStorage
-const loadTablesCountFromStorage = () => {
-  try {
-    const stored = localStorage.getItem(TABLES_COUNT_STORAGE_KEY)
-    if (stored) {
-      const count = parseInt(stored, 10)
-      return isNaN(count) || count < 1 ? DEFAULT_TABLES_COUNT : count
-    }
-  } catch (error) {
-    console.error('Error loading tables count from localStorage:', error)
-  }
-  return DEFAULT_TABLES_COUNT
-}
-
-// Load seats per table from localStorage
-const loadSeatsPerTableFromStorage = () => {
-  try {
-    const stored = localStorage.getItem(SEATS_PER_TABLE_STORAGE_KEY)
-    if (stored) {
-      const count = parseInt(stored, 10)
-      return isNaN(count) || count < 1 ? DEFAULT_SEATS_PER_TABLE : count
-    }
-  } catch (error) {
-    console.error('Error loading seats per table from localStorage:', error)
-  }
-  return DEFAULT_SEATS_PER_TABLE
-}
-
-// Save menu categories to localStorage
-const saveMenuToStorage = (menuCategories) => {
-  try {
-    localStorage.setItem(MENU_STORAGE_KEY, JSON.stringify(menuCategories))
-  } catch (error) {
-    console.error('Error saving menu to localStorage:', error)
-  }
-}
-
-// Load RSVPs from localStorage
-const loadRSVPsFromStorage = () => {
-  try {
-    const stored = localStorage.getItem(STORAGE_KEY)
-    if (stored) {
-      return JSON.parse(stored)
-    }
-  } catch (error) {
-    console.error('Error loading RSVPs from localStorage:', error)
-  }
-  return []
-}
-
-// Save RSVPs to localStorage
-const saveRSVPsToStorage = (rsvps) => {
-  try {
-    localStorage.setItem(STORAGE_KEY, JSON.stringify(rsvps))
-  } catch (error) {
-    console.error('Error saving RSVPs to localStorage:', error)
-  }
-}
 
 function App() {
-  const [rsvps, setRsvps] = useState(() => loadRSVPsFromStorage())
-  const [menuCategories, setMenuCategories] = useState(() => loadMenuFromStorage())
-  const [tablesCount, setTablesCount] = useState(() => loadTablesCountFromStorage())
-  const [seatsPerTable, setSeatsPerTable] = useState(() => loadSeatsPerTableFromStorage())
+  const [rsvps, setRsvps] = useState([])
+  const [menuCategories, setMenuCategories] = useState(DEFAULT_MENU_CATEGORIES)
+  const [tablesCount, setTablesCount] = useState(DEFAULT_TABLES_COUNT)
+  const [seatsPerTable, setSeatsPerTable] = useState(DEFAULT_SEATS_PER_TABLE)
   const [currentStep, setCurrentStep] = useState('menu') // 'menu', 'rsvp', 'seating', or 'admin'
+  const [loading, setLoading] = useState(true)
+  const [error, setError] = useState(null)
 
-  // Save to localStorage whenever RSVPs change
+  // Load initial data from API
   useEffect(() => {
-    saveRSVPsToStorage(rsvps)
-  }, [rsvps])
+    const loadData = async () => {
+      try {
+        setLoading(true)
+        setError(null)
 
-  // Save to localStorage whenever menu categories change
-  useEffect(() => {
-    saveMenuToStorage(menuCategories)
-  }, [menuCategories])
+        // Load all data in parallel
+        const [rsvpsData, menuData, configData] = await Promise.all([
+          fetchRSVPs().catch(() => []),
+          fetchMenu().catch(() => null),
+          fetchConfig().catch(() => ({ tablesCount: DEFAULT_TABLES_COUNT, seatsPerTable: DEFAULT_SEATS_PER_TABLE }))
+        ])
 
-  // Save to localStorage whenever tables count changes
-  useEffect(() => {
-    try {
-      localStorage.setItem(TABLES_COUNT_STORAGE_KEY, tablesCount.toString())
-    } catch (error) {
-      console.error('Error saving tables count to localStorage:', error)
+        setRsvps(rsvpsData)
+        if (menuData) {
+          setMenuCategories(menuData)
+        }
+        setTablesCount(configData.tablesCount || DEFAULT_TABLES_COUNT)
+        setSeatsPerTable(configData.seatsPerTable || DEFAULT_SEATS_PER_TABLE)
+      } catch (err) {
+        console.error('Error loading data:', err)
+        setError('Failed to load data. Please refresh the page.')
+      } finally {
+        setLoading(false)
+      }
     }
-  }, [tablesCount])
 
-  // Save to localStorage whenever seats per table changes
+    loadData()
+  }, [])
+
+  // Save to API whenever RSVPs change
   useEffect(() => {
-    try {
-      localStorage.setItem(SEATS_PER_TABLE_STORAGE_KEY, seatsPerTable.toString())
-    } catch (error) {
-      console.error('Error saving seats per table to localStorage:', error)
+    if (!loading) {
+      saveRSVPs(rsvps).catch(err => {
+        console.error('Error saving RSVPs:', err)
+        setError('Failed to save RSVPs. Please try again.')
+      })
     }
-  }, [seatsPerTable])
+  }, [rsvps, loading])
+
+  // Save to API whenever menu categories change
+  useEffect(() => {
+    if (!loading) {
+      saveMenu(menuCategories).catch(err => {
+        console.error('Error saving menu:', err)
+        setError('Failed to save menu. Please try again.')
+      })
+    }
+  }, [menuCategories, loading])
+
+  // Save to API whenever tables count or seats per table changes
+  useEffect(() => {
+    if (!loading) {
+      saveConfig(tablesCount, seatsPerTable).catch(err => {
+        console.error('Error saving config:', err)
+        setError('Failed to save configuration. Please try again.')
+      })
+    }
+  }, [tablesCount, seatsPerTable, loading])
 
   const handleRSVPSubmit = (rsvpData) => {
     const newRSVP = {
@@ -187,7 +148,7 @@ function App() {
           : rsvp
       )
       setRsvps(updatedRSVPs)
-      // localStorage will be updated automatically via useEffect
+      // API will be updated automatically via useEffect
     }
   }
 
@@ -220,7 +181,7 @@ function App() {
     )
     
     setRsvps(updatedRSVPs)
-    // localStorage will be updated automatically via useEffect
+    // API will be updated automatically via useEffect
   }
 
   const handleUpdateMenuChoices = (email, newMenuChoices) => {
@@ -245,7 +206,7 @@ function App() {
     )
     
     setRsvps(updatedRSVPs)
-    // localStorage will be updated automatically via useEffect
+    // API will be updated automatically via useEffect
   }
 
   const handleUpdateDietaryRequirements = (email, newDietaryRequirements) => {
@@ -265,7 +226,7 @@ function App() {
     )
     
     setRsvps(updatedRSVPs)
-    // localStorage will be updated automatically via useEffect
+    // API will be updated automatically via useEffect
   }
 
   const handleNewRSVP = () => {
@@ -302,12 +263,45 @@ function App() {
     setSeatsPerTable(newSeatsPerTable)
   }
 
+  if (loading) {
+    return (
+      <div className="app">
+        <header className="app-header">
+          <h1>🎄 Crimbo Planner</h1>
+          <p className="subtitle">Christmas Party RSVP & Seating</p>
+        </header>
+        <main className="app-main">
+          <div style={{ textAlign: 'center', padding: '2rem' }}>
+            <p>Loading...</p>
+          </div>
+        </main>
+      </div>
+    )
+  }
+
   return (
     <div className="app">
       <header className="app-header">
         <h1>🎄 Crimbo Planner</h1>
         <p className="subtitle">Christmas Party RSVP & Seating</p>
       </header>
+      {error && (
+        <div style={{ 
+          background: '#ff6b6b', 
+          color: 'white', 
+          padding: '0.5rem 1rem', 
+          textAlign: 'center',
+          margin: '0 1rem'
+        }}>
+          {error}
+          <button 
+            onClick={() => setError(null)} 
+            style={{ marginLeft: '1rem', background: 'white', border: 'none', padding: '0.25rem 0.5rem', cursor: 'pointer' }}
+          >
+            ×
+          </button>
+        </div>
+      )}
 
       <main className="app-main">
         {currentStep === 'menu' ? (

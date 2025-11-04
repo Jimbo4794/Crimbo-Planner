@@ -615,8 +615,9 @@
   transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
   background: rgba(30, 41, 59, 0.8);
   font-size: 0.75rem;
-  padding: 0.5rem;
+  padding: 0.25rem;
   text-align: center;
+  overflow: hidden;
 }
 
 .seat-number {
@@ -630,35 +631,43 @@
   flex-direction: column;
   align-items: center;
   justify-content: center;
-  gap: 0.2rem;
+  gap: 0.1rem;
   width: 100%;
   height: 100%;
-  padding: 0.2rem;
+  padding: 0.15rem;
+  overflow: hidden;
 }
 
 .seat-icon {
-  font-size: 1.25rem;
+  font-size: 1rem;
   line-height: 1;
+  flex-shrink: 0;
 }
 
 .seat-icon-image {
-  width: 32px;
-  height: 32px;
+  width: 24px;
+  height: 24px;
   border-radius: 50%;
   object-fit: cover;
   border: 1px solid var(--border-color);
+  flex-shrink: 0;
 }
 
 .seat-name {
-  font-size: 0.6875rem;
+  font-size: 0.6rem;
   font-weight: 500;
-  line-height: 1.2;
+  line-height: 1.1;
   word-break: break-word;
   max-width: 100%;
   color: var(--text-color);
   text-align: center;
-  padding: 0 0.2rem;
-  min-height: 2.4em;
+  padding: 0;
+  overflow: hidden;
+  display: -webkit-box;
+  -webkit-line-clamp: 2;
+  -webkit-box-orient: vertical;
+  max-height: 2.2em;
+  flex-shrink: 1;
 }
 
 .seat:hover:not(.occupied):not(.disabled) {
@@ -904,6 +913,7 @@
     width: 50px;
     height: 50px;
     font-size: 0.7rem;
+    padding: 0.2rem;
   }
 
   .seat-number {
@@ -911,11 +921,17 @@
   }
 
   .seat-icon {
-    font-size: 1rem;
+    font-size: 0.875rem;
+  }
+
+  .seat-icon-image {
+    width: 20px;
+    height: 20px;
   }
 
   .seat-name {
-    font-size: 0.55rem;
+    font-size: 0.5rem;
+    max-height: 1.8em;
   }
 
   .legend {
