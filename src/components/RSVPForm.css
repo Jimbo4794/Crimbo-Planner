@@ -1,17 +1,37 @@
 .rsvp-form-container {
-  background: var(--card-bg);
-  border-radius: 16px;
+  background: rgba(30, 41, 59, 0.85);
+  backdrop-filter: blur(20px);
+  -webkit-backdrop-filter: blur(20px);
+  border-radius: var(--radius-lg);
   padding: 2.5rem;
-  box-shadow: var(--shadow-hover);
-  max-width: 600px;
+  box-shadow: var(--shadow-lg), var(--shadow-glow);
+  max-width: 1000px;
   margin: 0 auto;
+  border: 1px solid var(--border-color);
+  position: relative;
+  overflow: hidden;
+}
+
+.rsvp-form-container::before {
+  content: '';
+  position: absolute;
+  top: 0;
+  left: 0;
+  right: 0;
+  height: 2px;
+  background: linear-gradient(90deg, transparent, var(--primary-color), transparent);
 }
 
 .rsvp-form-container h2 {
-  color: var(--primary-color);
+  color: var(--text-color);
   margin-bottom: 1.5rem;
-  font-size: 1.8rem;
+  font-size: 1.5rem;
+  font-weight: 700;
   text-align: center;
+  background: linear-gradient(135deg, var(--text-color) 0%, var(--primary-color) 100%);
+  -webkit-background-clip: text;
+  -webkit-text-fill-color: transparent;
+  background-clip: text;
 }
 
 .rsvp-form {
@@ -27,25 +47,28 @@
 }
 
 .form-group label {
-  font-weight: 600;
+  font-weight: 500;
   color: var(--text-color);
-  font-size: 1rem;
+  font-size: 0.875rem;
 }
 
 .form-group input[type="text"],
 .form-group input[type="email"] {
-  padding: 0.75rem;
-  border: 2px solid var(--border-color);
-  border-radius: 8px;
-  font-size: 1rem;
-  transition: all 0.3s ease;
+  padding: 0.625rem 0.875rem;
+  border: 1px solid var(--border-color);
+  border-radius: var(--radius);
+  font-size: 0.9375rem;
+  transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+  background: rgba(15, 23, 42, 0.6);
+  color: var(--text-color);
 }
 
 .form-group input[type="text"]:focus,
 .form-group input[type="email"]:focus {
   outline: none;
   border-color: var(--primary-color);
-  box-shadow: 0 0 0 3px rgba(200, 16, 46, 0.15);
+  box-shadow: 0 0 0 3px var(--primary-glow), var(--shadow-glow);
+  background: rgba(15, 23, 42, 0.8);
 }
 
 .form-group input[type="text"].error,
@@ -55,44 +78,46 @@
 
 .dietary-textarea {
   width: 100%;
-  padding: 0.75rem;
-  border: 2px solid var(--border-color);
-  border-radius: 8px;
-  font-size: 1rem;
+  padding: 0.625rem 0.875rem;
+  border: 1px solid var(--border-color);
+  border-radius: var(--radius);
+  font-size: 0.9375rem;
   font-family: inherit;
-  transition: all 0.3s ease;
+  transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
   resize: vertical;
+  background: rgba(15, 23, 42, 0.6);
+  color: var(--text-color);
 }
 
 .dietary-textarea:focus {
   outline: none;
   border-color: var(--primary-color);
-  box-shadow: 0 0 0 3px rgba(200, 16, 46, 0.15);
+  box-shadow: 0 0 0 3px var(--primary-glow), var(--shadow-glow);
+  background: rgba(15, 23, 42, 0.8);
 }
 
 .field-hint {
-  font-size: 0.875rem;
+  font-size: 0.8125rem;
   color: var(--text-light);
-  margin-top: 0.5rem;
-  font-style: italic;
+  margin-top: 0.25rem;
 }
 
 .error-message {
   color: var(--error-color);
-  font-size: 0.875rem;
-  margin-top: -0.25rem;
+  font-size: 0.8125rem;
+  margin-top: 0.25rem;
 }
 
 .menu-description {
-  font-size: 0.9rem;
+  font-size: 0.875rem;
   color: var(--text-light);
   margin-bottom: 1rem;
 }
 
 .menu-categories {
-  display: flex;
-  flex-direction: column;
-  gap: 1.5rem;
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  gap: 1.25rem;
 }
 
 .menu-category {
@@ -102,47 +127,48 @@
 }
 
 .menu-category-title {
-  color: var(--primary-color);
-  font-size: 1.2rem;
-  font-weight: 700;
+  color: var(--text-color);
+  font-size: 1rem;
+  font-weight: 600;
   margin-bottom: 0.5rem;
   padding-bottom: 0.5rem;
-  border-bottom: 2px solid var(--primary-color);
+  border-bottom: 1px solid var(--border-color);
 }
 
 .menu-options {
   display: flex;
   flex-direction: column;
-  gap: 0.75rem;
+  gap: 0.5rem;
 }
 
 .menu-option {
-  border: 2px solid var(--border-color);
-  border-left: 3px solid var(--secondary-color);
-  border-radius: 8px;
-  transition: all 0.3s ease;
-  background: var(--snow-white);
+  border: 1px solid var(--border-color);
+  border-radius: var(--radius);
+  transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+  background: rgba(15, 23, 42, 0.4);
 }
 
 .menu-option:hover {
   border-color: var(--primary-color);
-  border-left-color: var(--primary-color);
-  box-shadow: var(--shadow);
+  box-shadow: var(--shadow-sm), 0 0 15px var(--primary-glow);
+  background: rgba(15, 23, 42, 0.6);
+  transform: translateX(4px);
 }
 
 .menu-checkbox {
   display: flex;
   align-items: center;
-  padding: 1rem;
+  padding: 0.875rem;
   cursor: pointer;
-  gap: 1rem;
+  gap: 0.875rem;
 }
 
 .menu-checkbox input[type="checkbox"] {
-  width: 20px;
-  height: 20px;
+  width: 18px;
+  height: 18px;
   cursor: pointer;
   accent-color: var(--primary-color);
+  filter: drop-shadow(0 0 4px var(--primary-glow));
 }
 
 .menu-option-content {
@@ -153,13 +179,13 @@
 }
 
 .menu-option-label {
-  font-weight: 600;
+  font-weight: 500;
   color: var(--text-color);
-  font-size: 1rem;
+  font-size: 0.9375rem;
 }
 
 .menu-option-description {
-  font-size: 0.875rem;
+  font-size: 0.8125rem;
   color: var(--text-light);
 }
 
@@ -169,67 +195,86 @@
 
 .form-actions {
   display: flex;
-  gap: 1rem;
+  gap: 0.75rem;
   justify-content: flex-end;
   margin-top: 0.5rem;
 }
 
 .back-button {
-  background: var(--text-light);
-  color: white;
-  border: none;
-  padding: 1rem 2rem;
-  border-radius: 8px;
-  font-size: 1.1rem;
-  font-weight: 600;
+  background: rgba(15, 23, 42, 0.6);
+  color: var(--text-color);
+  border: 1px solid var(--border-color);
+  padding: 0.75rem 1.5rem;
+  border-radius: var(--radius);
+  font-size: 0.9375rem;
+  font-weight: 500;
   cursor: pointer;
-  transition: all 0.3s ease;
+  transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
 }
 
 .back-button:hover {
-  background: var(--text-color);
-  transform: translateY(-2px);
-  box-shadow: var(--shadow);
+  background: rgba(15, 23, 42, 0.8);
+  border-color: var(--primary-color);
+  box-shadow: var(--shadow-sm);
+  transform: translateY(-1px);
 }
 
 .submit-button {
-  background: linear-gradient(135deg, var(--primary-color) 0%, var(--accent-red) 100%);
+  background: linear-gradient(135deg, var(--primary-color) 0%, var(--primary-hover) 100%);
   color: white;
   border: none;
-  padding: 1rem 2rem;
-  border-radius: 8px;
-  font-size: 1.1rem;
+  padding: 0.75rem 1.5rem;
+  border-radius: var(--radius);
+  font-size: 0.9375rem;
   font-weight: 600;
   cursor: pointer;
-  transition: all 0.3s ease;
-  box-shadow: 0 2px 8px rgba(200, 16, 46, 0.3);
+  transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+  box-shadow: var(--shadow-sm), 0 0 20px var(--primary-glow);
+  position: relative;
+  overflow: hidden;
+}
+
+.submit-button::before {
+  content: '';
+  position: absolute;
+  top: 0;
+  left: -100%;
+  width: 100%;
+  height: 100%;
+  background: linear-gradient(90deg, transparent, rgba(255, 255, 255, 0.2), transparent);
+  transition: left 0.5s ease;
+}
+
+.submit-button:hover::before {
+  left: 100%;
 }
 
 .submit-button:hover {
+  background: linear-gradient(135deg, var(--primary-hover) 0%, var(--primary-color) 100%);
+  box-shadow: var(--shadow-md), 0 0 30px var(--primary-glow);
   transform: translateY(-2px);
-  box-shadow: var(--shadow-hover);
 }
 
 .submit-button:active {
-  transform: translateY(0);
+  transform: translateY(0) scale(0.98);
 }
 
 .icon-selection {
   display: flex;
   flex-wrap: wrap;
-  gap: 0.75rem;
+  gap: 0.5rem;
   margin-top: 0.5rem;
 }
 
 .icon-option {
-  background: var(--snow-white);
-  border: 2px solid var(--border-color);
-  border-radius: 8px;
-  width: 50px;
-  height: 50px;
-  font-size: 1.8rem;
+  background: rgba(15, 23, 42, 0.6);
+  border: 1px solid var(--border-color);
+  border-radius: var(--radius);
+  width: 48px;
+  height: 48px;
+  font-size: 1.5rem;
   cursor: pointer;
-  transition: all 0.3s ease;
+  transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
   display: flex;
   align-items: center;
   justify-content: center;
@@ -238,72 +283,48 @@
 
 .icon-option:hover {
   border-color: var(--primary-color);
+  box-shadow: var(--shadow-sm), 0 0 15px var(--primary-glow);
   transform: scale(1.1);
-  box-shadow: var(--shadow);
+  background: rgba(15, 23, 42, 0.8);
 }
 
 .icon-option.selected {
   border-color: var(--primary-color);
-  border-width: 3px;
-  background: rgba(200, 16, 46, 0.1);
-  box-shadow: 0 0 0 3px rgba(200, 16, 46, 0.2);
-  transform: scale(1.15);
-}
-
-@media (max-width: 768px) {
-  .rsvp-form-container {
-    padding: 1.5rem;
-  }
-  
-  .rsvp-form-container h2 {
-    font-size: 1.5rem;
-  }
-
-  .form-actions {
-    flex-direction: column;
-  }
-
-  .back-button,
-  .submit-button {
-    width: 100%;
-  }
-
-  .icon-option {
-    width: 45px;
-    height: 45px;
-    font-size: 1.5rem;
-  }
+  border-width: 2px;
+  background: rgba(59, 130, 246, 0.2);
+  box-shadow: 0 0 0 2px var(--primary-glow), 0 0 20px var(--primary-glow);
+  transform: scale(1.1);
 }
 
 .icon-type-selector {
   display: flex;
-  gap: 1rem;
+  gap: 0.5rem;
   margin-bottom: 1rem;
 }
 
 .icon-type-button {
   flex: 1;
-  padding: 0.75rem;
-  border: 2px solid var(--border-color);
-  border-radius: 8px;
-  background: var(--snow-white);
+  padding: 0.625rem;
+  border: 1px solid var(--border-color);
+  border-radius: var(--radius);
+  background: rgba(15, 23, 42, 0.6);
   color: var(--text-color);
-  font-size: 1rem;
-  font-weight: 600;
+  font-size: 0.875rem;
+  font-weight: 500;
   cursor: pointer;
-  transition: all 0.3s ease;
+  transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
 }
 
 .icon-type-button:hover {
   border-color: var(--primary-color);
-  transform: translateY(-2px);
-  box-shadow: var(--shadow);
+  background: rgba(15, 23, 42, 0.8);
 }
 
 .icon-type-button.active {
-  background: var(--primary-color);
+  background: linear-gradient(135deg, var(--primary-color) 0%, var(--primary-hover) 100%);
   color: white;
   border-color: var(--primary-color);
+  box-shadow: 0 0 15px var(--primary-glow);
 }
 
 .image-upload-section {
@@ -317,21 +338,22 @@
 
 .upload-button {
   display: inline-block;
-  background: var(--primary-color);
+  background: linear-gradient(135deg, var(--primary-color) 0%, var(--primary-hover) 100%);
   color: white;
   border: none;
-  padding: 0.75rem 1.5rem;
-  border-radius: 8px;
-  font-size: 1rem;
-  font-weight: 600;
+  padding: 0.625rem 1.25rem;
+  border-radius: var(--radius);
+  font-size: 0.875rem;
+  font-weight: 500;
   cursor: pointer;
-  transition: all 0.3s ease;
+  transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+  box-shadow: var(--shadow-sm), 0 0 15px var(--primary-glow);
 }
 
 .upload-button:hover {
-  background: #8b1538;
+  background: linear-gradient(135deg, var(--primary-hover) 0%, var(--primary-color) 100%);
+  box-shadow: var(--shadow-md), 0 0 25px var(--primary-glow);
   transform: translateY(-2px);
-  box-shadow: var(--shadow);
 }
 
 .selected-image-preview {
@@ -339,6 +361,7 @@
   flex-direction: column;
   align-items: center;
   gap: 1rem;
+  margin-top: 1rem;
 }
 
 .preview-image {
@@ -346,25 +369,54 @@
   height: 100px;
   border-radius: 50%;
   object-fit: cover;
-  border: 3px solid var(--primary-color);
-  box-shadow: var(--shadow);
+  border: 2px solid var(--primary-color);
+  box-shadow: 0 0 20px var(--primary-glow);
 }
 
 .remove-image-button {
-  background: var(--error-color);
+  background: linear-gradient(135deg, var(--error-color) 0%, #dc2626 100%);
   color: white;
   border: none;
   padding: 0.5rem 1rem;
-  border-radius: 6px;
-  font-size: 0.9rem;
-  font-weight: 600;
+  border-radius: var(--radius);
+  font-size: 0.8125rem;
+  font-weight: 500;
   cursor: pointer;
-  transition: all 0.3s ease;
+  transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+  box-shadow: var(--shadow-sm), 0 0 15px var(--error-glow);
 }
 
 .remove-image-button:hover {
-  background: #d32f2f;
+  background: linear-gradient(135deg, #dc2626 0%, var(--error-color) 100%);
+  box-shadow: var(--shadow-md), 0 0 25px var(--error-glow);
   transform: translateY(-2px);
-  box-shadow: var(--shadow);
 }
 
+@media (max-width: 768px) {
+  .rsvp-form-container {
+    padding: 1.5rem;
+  }
+
+  .rsvp-form-container h2 {
+    font-size: 1.25rem;
+  }
+
+  .menu-categories {
+    grid-template-columns: 1fr;
+  }
+
+  .form-actions {
+    flex-direction: column;
+  }
+
+  .back-button,
+  .submit-button {
+    width: 100%;
+  }
+
+  .icon-option {
+    width: 44px;
+    height: 44px;
+    font-size: 1.25rem;
+  }
+}

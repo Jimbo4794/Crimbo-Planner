@@ -1,4 +1,5 @@
 import { useState, useRef, useEffect } from 'react'
+import { createPortal } from 'react-dom'
 import './ImageCropper.css'
 
 function ImageCropper({ imageFile, onCropComplete, onCancel }) {
@@ -11,6 +12,8 @@ function ImageCropper({ imageFile, onCropComplete, onCancel }) {
   const imageRef = useRef(null)
   const containerRef = useRef(null)
   const cropCircleRef = useRef(null)
+  const overlayRef = useRef(null)
+  const containerElementRef = useRef(null)
 
   const CROP_SIZE = 200 // Size of the circular crop area
 
@@ -125,6 +128,51 @@ function ImageCropper({ imageFile, onCropComplete, onCancel }) {
     setScale(newScale)
   }
 
+  useEffect(() => {
+    // Prevent body scroll when cropper is open and preserve scroll position
+    const scrollY = window.scrollY || window.pageYOffset || document.documentElement.scrollTop
+    const originalOverflow = document.body.style.overflow
+    const originalPosition = document.body.style.position
+    const originalTop = document.body.style.top
+    const originalWidth = document.body.style.width
+    const originalPaddingRight = document.body.style.paddingRight
+    const originalScrollBehavior = document.documentElement.style.scrollBehavior
+
+    // Calculate scrollbar width to prevent layout shift
+    const scrollbarWidth = window.innerWidth - document.documentElement.clientWidth
+
+    // Use requestAnimationFrame to ensure smooth transition
+    requestAnimationFrame(() => {
+      // Lock body scroll while preserving scroll position
+      document.body.style.overflow = 'hidden'
+      document.body.style.position = 'fixed'
+      document.body.style.top = `-${scrollY}px`
+      document.body.style.width = '100%'
+      if (scrollbarWidth > 0) {
+        document.body.style.paddingRight = `${scrollbarWidth}px`
+      }
+      document.documentElement.style.scrollBehavior = 'auto'
+    })
+
+    return () => {
+      // Restore original styles
+      document.body.style.overflow = originalOverflow
+      document.body.style.position = originalPosition
+      document.body.style.top = originalTop
+      document.body.style.width = originalWidth
+      document.body.style.paddingRight = originalPaddingRight
+      document.documentElement.style.scrollBehavior = originalScrollBehavior
+      
+      // Restore scroll position after a brief delay to ensure styles are restored
+      requestAnimationFrame(() => {
+        window.scrollTo({
+          top: scrollY,
+          behavior: 'auto'
+        })
+      })
+    }
+  }, [])
+
   const handleCrop = () => {
     if (!imageRef.current || !canvasRef.current || !containerRef.current) return
 
@@ -168,9 +216,29 @@ function ImageCropper({ imageFile, onCropComplete, onCancel }) {
 
   if (!imageSrc) return null
 
-  return (
-    <div className="image-cropper-overlay" onClick={(e) => e.stopPropagation()}>
-      <div className="image-cropper-container">
+  const cropperContent = (
+    <div 
+      ref={overlayRef}
+      className="image-cropper-overlay" 
+      onClick={(e) => {
+        if (e.target === e.currentTarget) {
+          onCancel()
+        }
+      }}
+      onWheel={(e) => {
+        // Only handle wheel events if they're on the cropper container
+        if (!e.target.closest('.cropper-preview-container')) {
+          return
+        }
+        e.preventDefault()
+        e.stopPropagation()
+      }}
+    >
+      <div 
+        ref={containerElementRef}
+        className="image-cropper-container"
+        onClick={(e) => e.stopPropagation()}
+      >
         <h3>Crop Your Image</h3>
         <p className="cropper-instructions">
           Drag the circle to select area • Scroll to zoom image • The circular area will be your seat icon
@@ -182,7 +250,17 @@ function ImageCropper({ imageFile, onCropComplete, onCancel }) {
           onMouseMove={handleMouseMove}
           onMouseUp={handleMouseUp}
           onMouseLeave={handleMouseUp}
-          onWheel={handleZoom}
+          onWheel={(e) => {
+            handleZoom(e)
+            e.preventDefault()
+            e.stopPropagation()
+          }}
+          onTouchStart={(e) => {
+            // Prevent touch scrolling on the page
+            if (e.target === e.currentTarget || e.target.closest('.cropper-overlay-circle')) {
+              e.preventDefault()
+            }
+          }}
         >
           {imageSrc && imageRef.current && (
             <div 
@@ -230,6 +308,9 @@ function ImageCropper({ imageFile, onCropComplete, onCancel }) {
       <canvas ref={canvasRef} style={{ display: 'none' }} />
     </div>
   )
+
+  // Render using portal to ensure it's at the document root level
+  return createPortal(cropperContent, document.body)
 }
 
 export default ImageCropper

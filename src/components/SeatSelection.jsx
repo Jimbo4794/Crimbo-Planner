@@ -229,9 +229,9 @@ function SeatSelection({ rsvps, tablesCount = 5, seatsPerTable = 8, onSeatSelect
     const seats = []
     // Use responsive sizing - adjust for mobile
     const isMobile = window.innerWidth <= 768
-    const tableSize = isMobile ? 240 : 280
+    const tableSize = isMobile ? 240 : 320
     const seatSize = isMobile ? 60 : 70
-    const radius = isMobile ? 95 : 110 // Distance from center of table to center of seat
+    const radius = isMobile ? 95 : 120 // Distance from center of table to center of seat
     const centerX = tableSize / 2 // Half of table width
     const centerY = tableSize / 2 // Half of table height
     
