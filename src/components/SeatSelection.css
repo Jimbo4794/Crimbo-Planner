@@ -101,6 +101,68 @@
   box-shadow: var(--shadow-sm);
 }
 
+.edit-menu-section .form-group {
+  display: flex;
+  flex-direction: column;
+  gap: 0.5rem;
+  margin-bottom: 1rem;
+}
+
+.edit-menu-section .form-group label {
+  font-weight: 500;
+  color: var(--text-color);
+  font-size: 0.875rem;
+}
+
+.edit-menu-section .dietary-preferences {
+  display: grid;
+  grid-template-columns: repeat(2, 1fr);
+  gap: 0.75rem;
+  margin-top: 0.5rem;
+}
+
+.edit-menu-section .dietary-checkbox {
+  display: flex;
+  align-items: center;
+  gap: 0.625rem;
+  padding: 0.75rem;
+  border: 1px solid var(--border-color);
+  border-radius: var(--radius);
+  background: rgba(15, 23, 42, 0.4);
+  cursor: pointer;
+  transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+}
+
+.edit-menu-section .dietary-checkbox:hover {
+  border-color: var(--primary-color);
+  background: rgba(15, 23, 42, 0.6);
+  box-shadow: var(--shadow-sm), 0 0 10px var(--primary-glow);
+}
+
+.edit-menu-section .dietary-checkbox input[type="checkbox"] {
+  width: 18px;
+  height: 18px;
+  cursor: pointer;
+  accent-color: var(--primary-color);
+  filter: drop-shadow(0 0 4px var(--primary-glow));
+}
+
+.edit-menu-section .dietary-checkbox input[type="checkbox"]:checked + span {
+  color: var(--primary-color);
+  font-weight: 500;
+}
+
+.edit-menu-section .dietary-checkbox span {
+  color: var(--text-color);
+  font-size: 0.9375rem;
+}
+
+.edit-menu-section .error-message {
+  color: var(--error-color);
+  font-size: 0.8125rem;
+  margin-top: 0.25rem;
+}
+
 .edit-menu-section h4 {
   color: var(--text-color);
   margin-bottom: 0.75rem;
@@ -115,8 +177,8 @@
 }
 
 .menu-categories-edit {
-  display: flex;
-  flex-direction: column;
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
   gap: 1.25rem;
   margin-bottom: 1rem;
 }
@@ -145,12 +207,67 @@
 .menu-option-edit {
   border: 1px solid var(--border-color);
   border-radius: var(--radius);
-  transition: all 0.15s ease;
+  transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+  background: rgba(15, 23, 42, 0.4);
 }
 
-.menu-option-edit:hover {
+.menu-option-edit:hover:not(.disabled):not(.dietary-conflict) {
   border-color: var(--primary-color);
-  box-shadow: var(--shadow-sm);
+  box-shadow: var(--shadow-sm), 0 0 15px var(--primary-glow);
+  background: rgba(15, 23, 42, 0.6);
+  transform: translateX(4px);
+}
+
+.menu-option-edit.disabled {
+  opacity: 0.4;
+  cursor: not-allowed;
+  pointer-events: none;
+}
+
+.menu-option-edit.disabled .menu-checkbox-edit {
+  cursor: not-allowed;
+}
+
+.menu-option-edit.disabled:hover {
+  border-color: var(--border-color);
+  box-shadow: none;
+  background: rgba(15, 23, 42, 0.4);
+  transform: none;
+}
+
+.menu-option-edit.disabled .menu-option-label-edit,
+.menu-option-edit.disabled .menu-option-description-edit {
+  color: var(--text-light);
+  opacity: 0.6;
+}
+
+.menu-option-edit.dietary-conflict {
+  opacity: 0.5;
+  background: rgba(100, 100, 100, 0.2);
+  border-color: rgba(100, 100, 100, 0.5);
+  cursor: not-allowed;
+}
+
+.menu-option-edit.dietary-conflict:hover {
+  border-color: rgba(100, 100, 100, 0.5);
+  box-shadow: none;
+  background: rgba(100, 100, 100, 0.2);
+  transform: none;
+}
+
+.menu-option-edit.dietary-conflict .menu-option-label-edit,
+.menu-option-edit.dietary-conflict .menu-option-description-edit {
+  color: var(--text-light);
+  opacity: 0.7;
+}
+
+.menu-option-edit.dietary-conflict .menu-checkbox-edit {
+  cursor: not-allowed;
+}
+
+.menu-option-edit.dietary-conflict input[type="checkbox"] {
+  cursor: not-allowed;
+  opacity: 0.5;
 }
 
 .menu-checkbox-edit {
@@ -642,6 +759,7 @@
   font-size: 1rem;
   line-height: 1;
   flex-shrink: 0;
+  transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
 }
 
 .seat-icon-image {
@@ -651,6 +769,7 @@
   object-fit: cover;
   border: 1px solid var(--border-color);
   flex-shrink: 0;
+  transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
 }
 
 .seat-name {
@@ -682,6 +801,26 @@
   border-color: var(--error-color);
   cursor: not-allowed;
   opacity: 0.8;
+}
+
+.seat.occupied:hover {
+  transform: scale(1.5);
+  box-shadow: 0 0 25px var(--error-color);
+  transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+  z-index: 10;
+}
+
+.seat.occupied:hover .seat-icon {
+  font-size: 1.8rem;
+  transform: scale(1.2);
+  transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+}
+
+.seat.occupied:hover .seat-icon-image {
+  width: 38px;
+  height: 38px;
+  transform: scale(1.2);
+  transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
 }
 
 .seat.disabled {
@@ -980,6 +1119,14 @@
   .cancel-edit-button,
   .save-menu-button {
     width: 100%;
+  }
+
+  .edit-menu-section .dietary-preferences {
+    grid-template-columns: 1fr;
+  }
+
+  .menu-categories-edit {
+    grid-template-columns: 1fr;
   }
 
   .seat-confirmation-dialog {

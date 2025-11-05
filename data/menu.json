@@ -1,0 +1,77 @@
+[
+  {
+    "category": "Starters",
+    "options": [
+      {
+        "id": "soup",
+        "label": "Cream of Mushroom Soup",
+        "description": "Creamy mushroom soup with fresh herbs"
+      },
+      {
+        "id": "salad",
+        "label": "Caesar Salad",
+        "description": "Crisp romaine lettuce with Caesar dressing and parmesan"
+      },
+      {
+        "id": "prawns",
+        "label": "Prawn Cocktail",
+        "description": "Chilled prawns with cocktail sauce"
+      }
+    ]
+  },
+  {
+    "category": "Mains",
+    "options": [
+      {
+        "id": "turkey",
+        "label": "Roast Turkey",
+        "description": "Traditional roast turkey with gravy"
+      },
+      {
+        "id": "ham",
+        "label": "Honey Glazed Ham",
+        "description": "Succulent honey glazed ham"
+      },
+      {
+        "id": "vegetarian",
+        "label": "Vegetarian Option",
+        "description": "Stuffed bell peppers with quinoa"
+      },
+      {
+        "id": "vegan",
+        "label": "Vegan Option",
+        "description": "Roasted vegetable medley"
+      },
+      {
+        "id": "fish",
+        "label": "Salmon",
+        "description": "Herb-crusted salmon fillet"
+      }
+    ]
+  },
+  {
+    "category": "Desserts",
+    "options": [
+      {
+        "id": "pudding",
+        "label": "Christmas Pudding",
+        "description": "Traditional Christmas pudding with brandy sauce"
+      },
+      {
+        "id": "pie",
+        "label": "Mince Pie",
+        "description": "Sweet mince pie with brandy butter"
+      },
+      {
+        "id": "cheesecake",
+        "label": "Baileys Cheesecake",
+        "description": "Creamy Baileys Irish cream cheesecake"
+      },
+      {
+        "id": "icecream",
+        "label": "Vanilla Ice Cream",
+        "description": "Classic vanilla ice cream"
+      }
+    ]
+  }
+]

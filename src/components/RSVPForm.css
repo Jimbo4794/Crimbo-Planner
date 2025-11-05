@@ -102,6 +102,49 @@
   margin-top: 0.25rem;
 }
 
+.dietary-preferences {
+  display: grid;
+  grid-template-columns: repeat(2, 1fr);
+  gap: 0.75rem;
+  margin-top: 0.5rem;
+}
+
+.dietary-checkbox {
+  display: flex;
+  align-items: center;
+  gap: 0.625rem;
+  padding: 0.75rem;
+  border: 1px solid var(--border-color);
+  border-radius: var(--radius);
+  background: rgba(15, 23, 42, 0.4);
+  cursor: pointer;
+  transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+}
+
+.dietary-checkbox:hover {
+  border-color: var(--primary-color);
+  background: rgba(15, 23, 42, 0.6);
+  box-shadow: var(--shadow-sm), 0 0 10px var(--primary-glow);
+}
+
+.dietary-checkbox input[type="checkbox"] {
+  width: 18px;
+  height: 18px;
+  cursor: pointer;
+  accent-color: var(--primary-color);
+  filter: drop-shadow(0 0 4px var(--primary-glow));
+}
+
+.dietary-checkbox input[type="checkbox"]:checked + span {
+  color: var(--primary-color);
+  font-weight: 500;
+}
+
+.dietary-checkbox span {
+  color: var(--text-color);
+  font-size: 0.9375rem;
+}
+
 .error-message {
   color: var(--error-color);
   font-size: 0.8125rem;
@@ -153,6 +196,58 @@
   box-shadow: var(--shadow-sm), 0 0 15px var(--primary-glow);
   background: rgba(15, 23, 42, 0.6);
   transform: translateX(4px);
+}
+
+.menu-option.disabled {
+  opacity: 0.4;
+  cursor: not-allowed;
+  pointer-events: none;
+}
+
+.menu-option.disabled .menu-checkbox {
+  cursor: not-allowed;
+}
+
+.menu-option.disabled:hover {
+  border-color: var(--border-color);
+  box-shadow: none;
+  background: rgba(15, 23, 42, 0.4);
+  transform: none;
+}
+
+.menu-option.disabled .menu-option-label,
+.menu-option.disabled .menu-option-description {
+  color: var(--text-light);
+  opacity: 0.6;
+}
+
+.menu-option.dietary-conflict {
+  opacity: 0.5;
+  background: rgba(100, 100, 100, 0.2);
+  border-color: rgba(100, 100, 100, 0.5);
+  cursor: not-allowed;
+}
+
+.menu-option.dietary-conflict:hover {
+  border-color: rgba(100, 100, 100, 0.5);
+  box-shadow: none;
+  background: rgba(100, 100, 100, 0.2);
+  transform: none;
+}
+
+.menu-option.dietary-conflict .menu-option-label,
+.menu-option.dietary-conflict .menu-option-description {
+  color: var(--text-light);
+  opacity: 0.7;
+}
+
+.menu-option.dietary-conflict .menu-checkbox {
+  cursor: not-allowed;
+}
+
+.menu-option.dietary-conflict input[type="checkbox"] {
+  cursor: not-allowed;
+  opacity: 0.5;
 }
 
 .menu-checkbox {
@@ -418,5 +513,9 @@
     width: 44px;
     height: 44px;
     font-size: 1.25rem;
+  }
+
+  .dietary-preferences {
+    grid-template-columns: 1fr;
   }
 }

@@ -13,7 +13,6 @@ function ImageCropper({ imageFile, onCropComplete, onCancel }) {
   const containerRef = useRef(null)
   const cropCircleRef = useRef(null)
   const overlayRef = useRef(null)
-  const containerElementRef = useRef(null)
 
   const CROP_SIZE = 200 // Size of the circular crop area
 
@@ -235,7 +234,6 @@ function ImageCropper({ imageFile, onCropComplete, onCancel }) {
       }}
     >
       <div 
-        ref={containerElementRef}
         className="image-cropper-container"
         onClick={(e) => e.stopPropagation()}
       >

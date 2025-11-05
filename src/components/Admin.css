@@ -428,6 +428,49 @@
   accent-color: var(--primary-color);
 }
 
+.admin-dietary-preferences {
+  display: grid;
+  grid-template-columns: repeat(2, 1fr);
+  gap: 0.75rem;
+  margin-top: 0.5rem;
+}
+
+.admin-dietary-checkbox {
+  display: flex;
+  align-items: center;
+  gap: 0.625rem;
+  padding: 0.75rem;
+  border: 1px solid var(--border-color);
+  border-radius: var(--radius);
+  background: rgba(15, 23, 42, 0.4);
+  cursor: pointer;
+  transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+}
+
+.admin-dietary-checkbox:hover {
+  border-color: var(--primary-color);
+  background: rgba(15, 23, 42, 0.6);
+  box-shadow: var(--shadow-sm), 0 0 10px var(--primary-glow);
+}
+
+.admin-dietary-checkbox input[type="checkbox"] {
+  width: 18px;
+  height: 18px;
+  cursor: pointer;
+  accent-color: var(--primary-color);
+  filter: drop-shadow(0 0 4px var(--primary-glow));
+}
+
+.admin-dietary-checkbox input[type="checkbox"]:checked + span {
+  color: var(--primary-color);
+  font-weight: 500;
+}
+
+.admin-dietary-checkbox span {
+  color: var(--text-color);
+  font-size: 0.9375rem;
+}
+
 .admin-icon-selection {
   display: flex;
   flex-wrap: wrap;
@@ -702,6 +745,49 @@
   border-color: var(--primary-color);
   box-shadow: 0 0 0 3px var(--primary-glow), var(--shadow-glow);
   background: rgba(15, 23, 42, 0.8);
+}
+
+.admin-menu-dietary-flags {
+  display: grid;
+  grid-template-columns: repeat(2, 1fr);
+  gap: 0.75rem;
+  margin-top: 0.5rem;
+}
+
+.admin-menu-dietary-flag {
+  display: flex;
+  align-items: center;
+  gap: 0.625rem;
+  padding: 0.625rem;
+  border: 1px solid var(--border-color);
+  border-radius: var(--radius);
+  background: rgba(15, 23, 42, 0.4);
+  cursor: pointer;
+  transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+}
+
+.admin-menu-dietary-flag:hover {
+  border-color: var(--primary-color);
+  background: rgba(15, 23, 42, 0.6);
+  box-shadow: var(--shadow-sm), 0 0 10px var(--primary-glow);
+}
+
+.admin-menu-dietary-flag input[type="checkbox"] {
+  width: 18px;
+  height: 18px;
+  cursor: pointer;
+  accent-color: var(--primary-color);
+  filter: drop-shadow(0 0 4px var(--primary-glow));
+}
+
+.admin-menu-dietary-flag input[type="checkbox"]:checked + span {
+  color: var(--primary-color);
+  font-weight: 500;
+}
+
+.admin-menu-dietary-flag span {
+  color: var(--text-color);
+  font-size: 0.875rem;
 }
 
 .remove-option-button {

@@ -1,10 +1,9 @@
-import { useState, useEffect } from 'react'
+import { useState, useEffect, useRef } from 'react'
 import './SeatSelection.css'
+import { conflictsWithDietaryPreferences } from '../utils/dietaryConflicts'
+import { AUTO_SIGNIN_TIMEOUT } from '../utils/constants'
 
-function SeatSelection({ rsvps, tablesCount = 5, seatsPerTable = 8, onSeatSelect, onNewRSVP, onChangeSeat, onUpdateMenuChoices, onUpdateDietaryRequirements, onBackToMenu, menuCategories = [] }) {
-  const [selectedTable, setSelectedTable] = useState(null)
-  const [selectedSeat, setSelectedSeat] = useState(null)
-  const [changeSeatMode, setChangeSeatMode] = useState(false)
+function SeatSelection({ rsvps, tablesCount = 5, seatsPerTable = 8, onSeatSelect, onChangeSeat, onUpdateMenuChoices, onUpdateDietaryRequirements, onUpdateDietaryPreferences, onBackToMenu, menuCategories = [] }) {
   const [lookupEmail, setLookupEmail] = useState('')
   const [lookupError, setLookupError] = useState('')
   const [foundRSVP, setFoundRSVP] = useState(null)
@@ -13,6 +12,17 @@ function SeatSelection({ rsvps, tablesCount = 5, seatsPerTable = 8, onSeatSelect
   const [explicitlySignedOut, setExplicitlySignedOut] = useState(false)
   const [editingDietary, setEditingDietary] = useState(false)
   const [tempDietaryRequirements, setTempDietaryRequirements] = useState('')
+  const [tempVegetarian, setTempVegetarian] = useState(false)
+  const [tempVegan, setTempVegan] = useState(false)
+  const [tempGlutenIntolerant, setTempGlutenIntolerant] = useState(false)
+  const [tempLactoseIntolerant, setTempLactoseIntolerant] = useState(false)
+  const [menuErrors, setMenuErrors] = useState({})
+  const menuChoicesRef = useRef([])
+  
+  // Keep ref in sync with state
+  useEffect(() => {
+    menuChoicesRef.current = tempMenuChoices
+  }, [tempMenuChoices])
 
   // Helper function to get menu option label by ID
   const getMenuOptionLabel = (menuId) => {
@@ -38,7 +48,7 @@ function SeatSelection({ rsvps, tablesCount = 5, seatsPerTable = 8, onSeatSelect
       const timeDiff = now - submittedTime
       
       // Auto-sign in if submitted within last 2 minutes (plenty of time for navigation)
-      if (timeDiff < 120000) {
+      if (timeDiff < AUTO_SIGNIN_TIMEOUT) {
         setFoundRSVP(latestRSVP)
       }
     }
@@ -82,28 +92,22 @@ function SeatSelection({ rsvps, tablesCount = 5, seatsPerTable = 8, onSeatSelect
       return
     }
 
-    setSelectedTable(tableNumber)
-    setSelectedSeat(seatNumber)
-  }
-
-  const handleConfirmSeat = () => {
-    if (selectedTable && selectedSeat && currentUser) {
+    // Automatically confirm seat selection
+    if (currentUser) {
       if (foundRSVP) {
         // Changing seat for existing RSVP
-        onChangeSeat(foundRSVP.email, selectedTable, selectedSeat)
+        onChangeSeat(foundRSVP.email, tableNumber, seatNumber)
         // Update foundRSVP to reflect the change
-        setFoundRSVP({ ...foundRSVP, table: selectedTable, seat: selectedSeat })
+        setFoundRSVP({ ...foundRSVP, table: tableNumber, seat: seatNumber })
       } else if (latestRSVP) {
         // New seat selection for latest RSVP (auto-signed in)
-        onSeatSelect(selectedTable, selectedSeat)
+        onSeatSelect(tableNumber, seatNumber)
         // Update foundRSVP to reflect they're now signed in with a seat
-        setFoundRSVP({ ...latestRSVP, table: selectedTable, seat: selectedSeat })
+        setFoundRSVP({ ...latestRSVP, table: tableNumber, seat: seatNumber })
       } else {
         // This shouldn't happen if we're enforcing sign-in, but handle it gracefully
         alert('Please look up your reservation first.')
       }
-      setSelectedTable(null)
-      setSelectedSeat(null)
     }
   }
 
@@ -137,35 +141,13 @@ function SeatSelection({ rsvps, tablesCount = 5, seatsPerTable = 8, onSeatSelect
     setFoundRSVP(found)
     setExplicitlySignedOut(false) // Reset sign out flag when they look up
     setLookupError('')
-    
-    // If they already have a seat, clear it from the occupied seats map
-    // so they can see it as available for selection
-    if (found.table && found.seat) {
-      // Clear their current selection state
-      setSelectedTable(null)
-      setSelectedSeat(null)
-    }
-  }
-
-  const cancelChangeSeat = () => {
-    setChangeSeatMode(false)
-    setLookupEmail('')
-    setLookupError('')
-    setFoundRSVP(null)
-    setSelectedTable(null)
-    setSelectedSeat(null)
-    setEditingMenu(false)
-    setEditingDietary(false)
   }
 
   const handleSignOut = () => {
     setFoundRSVP(null)
     setExplicitlySignedOut(true)
-    setSelectedTable(null)
-    setSelectedSeat(null)
     setEditingMenu(false)
     setEditingDietary(false)
-    setChangeSeatMode(false)
     setLookupEmail('')
     setLookupError('')
   }
@@ -173,6 +155,11 @@ function SeatSelection({ rsvps, tablesCount = 5, seatsPerTable = 8, onSeatSelect
   const handleStartEditMenu = () => {
     if (currentUser) {
       setTempMenuChoices([...currentUser.menuChoices])
+      setTempVegetarian(currentUser.vegetarian || false)
+      setTempVegan(currentUser.vegan || false)
+      setTempGlutenIntolerant(currentUser.glutenIntolerant || false)
+      setTempLactoseIntolerant(currentUser.lactoseIntolerant || false)
+      setMenuErrors({})
       setEditingMenu(true)
     }
   }
@@ -184,31 +171,193 @@ function SeatSelection({ rsvps, tablesCount = 5, seatsPerTable = 8, onSeatSelect
     }
   }
 
-  const handleMenuToggle = (menuId) => {
-    setTempMenuChoices(prev => 
-      prev.includes(menuId)
-        ? prev.filter(id => id !== menuId)
-        : [...prev, menuId]
+  // Helper function to find menu option by ID
+  const findMenuOption = (optionId) => {
+    for (const category of menuCategories) {
+      const option = category.options.find(opt => opt.id === optionId)
+      if (option) return option
+    }
+    return null
+  }
+
+  // Wrapper function for conflictsWithDietaryPreferences with current dietary preferences
+  const checkConflicts = (optionId, optionLabel, optionDescription) => {
+    const menuOption = findMenuOption(optionId)
+    return conflictsWithDietaryPreferences(
+      optionId,
+      optionLabel,
+      optionDescription,
+      menuOption,
+      tempVegetarian,
+      tempVegan,
+      tempGlutenIntolerant,
+      tempLactoseIntolerant
     )
   }
 
+  // Effect to automatically unselect conflicting menu items when dietary preferences change
+  useEffect(() => {
+    if (!editingMenu) return
+    
+    const currentChoices = menuChoicesRef.current
+    if (currentChoices.length === 0) return
+
+    // Check each selected menu choice for conflicts
+    const conflictingChoices = currentChoices.filter(choiceId => {
+      // Find the menu option
+      let menuOption = null
+      for (const category of menuCategories) {
+        const option = category.options.find(opt => opt.id === choiceId)
+        if (option) {
+          menuOption = option
+          break
+        }
+      }
+      
+      if (!menuOption) return false
+
+      // Check conflicts using shared utility
+      return conflictsWithDietaryPreferences(
+        choiceId,
+        menuOption.label || '',
+        menuOption.description || '',
+        menuOption,
+        tempVegetarian,
+        tempVegan,
+        tempGlutenIntolerant,
+        tempLactoseIntolerant
+      )
+    })
+
+    // If there are conflicting choices, remove them
+    if (conflictingChoices.length > 0) {
+      setTempMenuChoices(prevChoices => 
+        prevChoices.filter(choiceId => !conflictingChoices.includes(choiceId))
+      )
+    }
+  }, [tempVegetarian, tempVegan, tempGlutenIntolerant, tempLactoseIntolerant, menuCategories, editingMenu])
+
+  // Helper function to check if an option should be disabled
+  const isOptionDisabled = (optionId, category, option) => {
+    // Find the category that contains this option
+    const categoryData = menuCategories.find(cat => 
+      cat.options.some(opt => opt.id === optionId)
+    )
+    
+    if (!categoryData) return false
+    
+    // Get all option IDs from this category
+    const categoryOptionIds = categoryData.options.map(opt => opt.id)
+    
+    // Find which option is currently selected in this category
+    const selectedInCategory = tempMenuChoices.find(id => categoryOptionIds.includes(id))
+    
+    // Disable if another option is selected in this category (but not this one)
+    const categoryConflict = selectedInCategory !== undefined && selectedInCategory !== optionId
+    
+    // Disable if conflicts with dietary preferences
+    const dietaryConflict = checkConflicts(
+      optionId, 
+      option?.label, 
+      option?.description
+    )
+    
+    return categoryConflict || dietaryConflict
+  }
+
+  const handleMenuToggle = (menuId, category) => {
+    // Find the category that contains this menu option
+    const categoryData = menuCategories.find(cat => 
+      cat.options.some(opt => opt.id === menuId)
+    )
+    
+    if (!categoryData) return
+    
+    setTempMenuChoices(prev => {
+      // Get all option IDs from this category
+      const categoryOptionIds = categoryData.options.map(opt => opt.id)
+      
+      // Remove any existing selections from this category
+      const withoutCategory = prev.filter(id => !categoryOptionIds.includes(id))
+      
+      // If this option is already selected, deselect it
+      if (prev.includes(menuId)) {
+        return withoutCategory
+      }
+      
+      // Otherwise, add this option (only one per category)
+      return [...withoutCategory, menuId]
+    })
+    
+    // Clear error when user selects something
+    if (menuErrors.menuChoices) {
+      setMenuErrors({ ...menuErrors, menuChoices: null })
+    }
+  }
+
   const handleSaveMenuChoices = () => {
-    if (tempMenuChoices.length === 0) {
-      alert('Please select at least one menu option')
+    const newErrors = {}
+
+    // Check if user has selected one option from each category
+    const selectedCategories = menuCategories.filter(category =>
+      category.options.some(option => tempMenuChoices.includes(option.id))
+    )
+    
+    if (selectedCategories.length !== menuCategories.length) {
+      newErrors.menuChoices = 'Please select one option from each category (starter, main, and dessert)'
+    }
+
+    if (Object.keys(newErrors).length > 0) {
+      setMenuErrors(newErrors)
       return
     }
 
+    // Update dietary preferences if they changed
+    if (currentUser && onUpdateDietaryPreferences) {
+      const dietaryChanged = 
+        currentUser.vegetarian !== tempVegetarian ||
+        currentUser.vegan !== tempVegan ||
+        currentUser.glutenIntolerant !== tempGlutenIntolerant ||
+        currentUser.lactoseIntolerant !== tempLactoseIntolerant
+
+      if (dietaryChanged) {
+        onUpdateDietaryPreferences(currentUser.email, {
+          vegetarian: tempVegetarian,
+          vegan: tempVegan,
+          glutenIntolerant: tempGlutenIntolerant,
+          lactoseIntolerant: tempLactoseIntolerant
+        })
+      }
+    }
+
+    // Update menu choices
     if (currentUser && onUpdateMenuChoices) {
       onUpdateMenuChoices(currentUser.email, tempMenuChoices)
       // Update foundRSVP to reflect the change
-      setFoundRSVP({ ...foundRSVP, menuChoices: tempMenuChoices })
+      setFoundRSVP({ 
+        ...foundRSVP, 
+        menuChoices: tempMenuChoices,
+        vegetarian: tempVegetarian,
+        vegan: tempVegan,
+        glutenIntolerant: tempGlutenIntolerant,
+        lactoseIntolerant: tempLactoseIntolerant
+      })
       setEditingMenu(false)
+      setMenuErrors({})
     }
   }
 
   const handleCancelEditMenu = () => {
     setEditingMenu(false)
     setTempMenuChoices([])
+    setMenuErrors({})
+    // Reset dietary preferences to original values
+    if (currentUser) {
+      setTempVegetarian(currentUser.vegetarian || false)
+      setTempVegan(currentUser.vegan || false)
+      setTempGlutenIntolerant(currentUser.glutenIntolerant || false)
+      setTempLactoseIntolerant(currentUser.lactoseIntolerant || false)
+    }
   }
 
   const handleSaveDietaryRequirements = () => {
@@ -238,7 +387,6 @@ function SeatSelection({ rsvps, tablesCount = 5, seatsPerTable = 8, onSeatSelect
     for (let i = 1; i <= seatsPerTable; i++) {
       const key = `${tableNumber}-${i}`
       const isOccupied = !!occupiedSeats[key]
-      const isSelected = selectedTable === tableNumber && selectedSeat === i
       const occupant = occupiedSeats[key]
       
       // Check if this is the current user's seat
@@ -256,7 +404,7 @@ function SeatSelection({ rsvps, tablesCount = 5, seatsPerTable = 8, onSeatSelect
       seats.push(
         <div
           key={i}
-          className={`seat ${isOccupied ? 'occupied' : ''} ${isSelected ? 'selected' : ''} ${!isSignedIn ? 'disabled' : ''} ${isMySeat ? 'my-seat' : ''}`}
+          className={`seat ${isOccupied ? 'occupied' : ''} ${!isSignedIn ? 'disabled' : ''} ${isMySeat ? 'my-seat' : ''}`}
           onClick={() => canSelect && handleSeatClick(tableNumber, i)}
           style={{
             left: `${x}px`,
@@ -292,7 +440,7 @@ function SeatSelection({ rsvps, tablesCount = 5, seatsPerTable = 8, onSeatSelect
     }
 
     return (
-      <div key={tableNumber} className="table-container">
+      <div key={tableNumber} className="table-container" data-table-number={tableNumber}>
         <h3>Table {tableNumber}</h3>
         <div className="table">{seats}</div>
         <div className="table-info">
@@ -364,31 +512,90 @@ function SeatSelection({ rsvps, tablesCount = 5, seatsPerTable = 8, onSeatSelect
             ) : (
               <div className="edit-menu-section">
                 <h4>Edit Your Menu Choices</h4>
-                <p className="menu-edit-description">Select at least one menu option from any category:</p>
-                <div className="menu-categories-edit">
-                  {menuCategories.map(category => (
-                    <div key={category.category} className="menu-category-edit">
-                      <h5 className="menu-category-title-edit">{category.category}</h5>
-                      <div className="menu-options-edit">
-                        {category.options.map(option => (
-                          <div key={option.id} className="menu-option-edit">
-                            <label className="menu-checkbox-edit">
-                              <input
-                                type="checkbox"
-                                checked={tempMenuChoices.includes(option.id)}
-                                onChange={() => handleMenuToggle(option.id)}
-                              />
-                              <div className="menu-option-content-edit">
-                                <span className="menu-option-label-edit">{option.label}</span>
-                                <span className="menu-option-description-edit">{option.description}</span>
-                              </div>
-                            </label>
-                          </div>
-                        ))}
-                      </div>
-                    </div>
-                  ))}
+                <p className="menu-edit-description">Select one starter, one main, and one dessert:</p>
+                
+                <div className="form-group">
+                  <label>Dietary Preferences</label>
+                  <div className="dietary-preferences">
+                    <label className="dietary-checkbox">
+                      <input
+                        type="checkbox"
+                        checked={tempVegetarian}
+                        onChange={(e) => setTempVegetarian(e.target.checked)}
+                      />
+                      <span>Vegetarian</span>
+                    </label>
+                    <label className="dietary-checkbox">
+                      <input
+                        type="checkbox"
+                        checked={tempVegan}
+                        onChange={(e) => setTempVegan(e.target.checked)}
+                      />
+                      <span>Vegan</span>
+                    </label>
+                    <label className="dietary-checkbox">
+                      <input
+                        type="checkbox"
+                        checked={tempGlutenIntolerant}
+                        onChange={(e) => setTempGlutenIntolerant(e.target.checked)}
+                      />
+                      <span>Gluten Intolerant</span>
+                    </label>
+                    <label className="dietary-checkbox">
+                      <input
+                        type="checkbox"
+                        checked={tempLactoseIntolerant}
+                        onChange={(e) => setTempLactoseIntolerant(e.target.checked)}
+                      />
+                      <span>Lactose Intolerant</span>
+                    </label>
+                  </div>
                 </div>
+
+                <div className="form-group">
+                  <label>Menu Choices *</label>
+                  <div className="menu-categories-edit">
+                    {menuCategories.map(category => (
+                      <div key={category.category} className="menu-category-edit">
+                        <h5 className="menu-category-title-edit">{category.category}</h5>
+                        <div className="menu-options-edit">
+                          {category.options.map(option => {
+                            const isDisabled = isOptionDisabled(option.id, category, option)
+                            const isDietaryConflict = checkConflicts(
+                              option.id, 
+                              option.label, 
+                              option.description
+                            )
+                            return (
+                              <div 
+                                key={option.id} 
+                                className={`menu-option-edit ${isDisabled ? 'disabled' : ''} ${isDietaryConflict ? 'dietary-conflict' : ''}`}
+                                title={isDietaryConflict ? 'This item conflicts with your dietary preferences' : ''}
+                              >
+                                <label className="menu-checkbox-edit">
+                                  <input
+                                    type="checkbox"
+                                    checked={tempMenuChoices.includes(option.id)}
+                                    onChange={() => handleMenuToggle(option.id, category)}
+                                    disabled={isDisabled}
+                                  />
+                                  <div className="menu-option-content-edit">
+                                    <span className="menu-option-label-edit">{option.label}</span>
+                                    <span className="menu-option-description-edit">{option.description}</span>
+                                  </div>
+                                </label>
+                              </div>
+                            )
+                          })}
+                        </div>
+                      </div>
+                    ))}
+                  </div>
+                  {menuErrors.menuChoices && (
+                    <span className="error-message">{menuErrors.menuChoices}</span>
+                  )}
+                </div>
+
                 <div className="menu-edit-actions">
                   <button onClick={handleCancelEditMenu} className="cancel-edit-button">
                     Cancel
@@ -469,32 +676,6 @@ function SeatSelection({ rsvps, tablesCount = 5, seatsPerTable = 8, onSeatSelect
       <div className="tables-grid">
         {Array.from({ length: tablesCount }, (_, i) => renderTable(i + 1))}
       </div>
-
-      {selectedTable && selectedSeat && (
-        <div className="dialog-overlay" onClick={() => {
-          setSelectedTable(null)
-          setSelectedSeat(null)
-        }}>
-          <div className="seat-confirmation-dialog" onClick={(e) => e.stopPropagation()}>
-            <h3>Confirm Seat Selection</h3>
-            <p>You've selected <strong>Seat {selectedSeat}</strong> at <strong>Table {selectedTable}</strong></p>
-            <div className="dialog-actions">
-              <button 
-                onClick={() => {
-                  setSelectedTable(null)
-                  setSelectedSeat(null)
-                }} 
-                className="cancel-dialog-button"
-              >
-                Cancel
-              </button>
-              <button onClick={handleConfirmSeat} className="confirm-button">
-                {foundRSVP && currentUser?.seat ? 'Confirm Seat Change' : 'Confirm Seat Selection'}
-              </button>
-            </div>
-          </div>
-        </div>
-      )}
 
       {onBackToMenu && (
         <div className="seat-selection-actions">

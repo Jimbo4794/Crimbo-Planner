@@ -1,0 +1,22 @@
+[
+  {
+    "id": "1762371451879",
+    "name": "Test",
+    "email": "test@test.com",
+    "menuChoices": [
+      "vegan",
+      "pudding",
+      "salad"
+    ],
+    "dietaryRequirements": "",
+    "vegetarian": true,
+    "vegan": false,
+    "glutenIntolerant": false,
+    "lactoseIntolerant": false,
+    "icon": "🍪",
+    "iconType": "emoji",
+    "seat": 1,
+    "table": 2,
+    "submittedAt": "2025-11-05T19:37:31.879Z"
+  }
+]

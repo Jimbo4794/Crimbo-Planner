@@ -1,14 +1,10 @@
 import { useState, useEffect } from 'react'
 import './Admin.css'
 import ImageCropper from './ImageCropper'
+import { AVAILABLE_ICONS, MAX_IMAGE_SIZE } from '../utils/constants'
 
 // Get admin password from environment variable, fallback to default
 const ADMIN_PASSWORD = import.meta.env.VITE_ADMIN_PASSWORD || 'admin123'
-
-const AVAILABLE_ICONS = [
-  '🎄', '🎅', '❄️', '🎁', '🦌', '⭐', '🎀', '🔔', 
-  '⛄', '🎄', '🕯️', '🍪', '🎊', '🦌', '🌟', '🎈'
-]
 
 function Admin({ rsvps, menuCategories, tablesCount, seatsPerTable, onUpdateRSVPs, onUpdateMenuCategories, onUpdateTablesCount, onUpdateSeatsPerTable, onBackToMenu }) {
   // Helper function to get menu option label by ID
@@ -70,7 +66,7 @@ function Admin({ rsvps, menuCategories, tablesCount, seatsPerTable, onUpdateRSVP
         alert('Please select a valid image file')
         return
       }
-      if (file.size > 5 * 1024 * 1024) {
+      if (file.size > MAX_IMAGE_SIZE) {
         alert('Image size must be less than 5MB')
         return
       }
@@ -126,8 +122,24 @@ function Admin({ rsvps, menuCategories, tablesCount, seatsPerTable, onUpdateRSVP
   }
 
   const handleExportCSV = () => {
+    // Helper function to get menu choices for a specific category
+    const getMenuChoicesForCategory = (menuChoiceIds, categoryName) => {
+      // Find the category
+      const category = menuCategories.find(cat => 
+        cat.category.toLowerCase() === categoryName.toLowerCase()
+      )
+      if (!category) return []
+      
+      // Get menu choice IDs that belong to this category
+      const categoryChoiceIds = category.options.map(opt => opt.id)
+      const matchingChoices = menuChoiceIds.filter(id => categoryChoiceIds.includes(id))
+      
+      // Return the labels for matching choices
+      return matchingChoices.map(id => getMenuOptionLabel(id))
+    }
+    
     // Create CSV header
-    const headers = ['Name', 'Email', 'Icon', 'Menu Choices', 'Dietary Requirements', 'Table', 'Seat', 'Submitted At']
+    const headers = ['Name', 'Email', 'Starter', 'Mains', 'Dessert', 'Vegetarian', 'Vegan', 'Gluten Intolerant', 'Lactose Intolerant', 'Dietary Requirements', 'Table', 'Seat']
     
     // Convert RSVPs to CSV rows
     const csvRows = [
@@ -135,18 +147,27 @@ function Admin({ rsvps, menuCategories, tablesCount, seatsPerTable, onUpdateRSVP
     ]
     
     rsvps.forEach(rsvp => {
-      const menuChoicesLabels = rsvp.menuChoices.map(id => getMenuOptionLabel(id))
-      const menuChoicesStr = `"${menuChoicesLabels.join('; ')}"` // Use semicolon to separate, quoted to handle commas
+      const starterChoices = getMenuChoicesForCategory(rsvp.menuChoices, 'Starters')
+      const mainsChoices = getMenuChoicesForCategory(rsvp.menuChoices, 'Mains')
+      const dessertChoices = getMenuChoicesForCategory(rsvp.menuChoices, 'Desserts')
+      
+      const starterStr = `"${starterChoices.join('; ').replace(/"/g, '""')}"`
+      const mainsStr = `"${mainsChoices.join('; ').replace(/"/g, '""')}"`
+      const dessertStr = `"${dessertChoices.join('; ').replace(/"/g, '""')}"`
       const dietaryStr = `"${(rsvp.dietaryRequirements || '').replace(/"/g, '""')}"` // Escape quotes in CSV
       const row = [
         `"${rsvp.name}"`,
         `"${rsvp.email}"`,
-        rsvp.icon || '🎄',
-        menuChoicesStr,
+        starterStr,
+        mainsStr,
+        dessertStr,
+        rsvp.vegetarian ? 'Yes' : 'No',
+        rsvp.vegan ? 'Yes' : 'No',
+        rsvp.glutenIntolerant ? 'Yes' : 'No',
+        rsvp.lactoseIntolerant ? 'Yes' : 'No',
         dietaryStr,
         rsvp.table || '',
-        rsvp.seat || '',
-        `"${new Date(rsvp.submittedAt).toLocaleString()}"`
+        rsvp.seat || ''
       ]
       csvRows.push(row.join(','))
     })
@@ -281,11 +302,48 @@ function Admin({ rsvps, menuCategories, tablesCount, seatsPerTable, onUpdateRSVP
                           />
                         </div>
                         <div className="form-group">
-                          <label>Dietary Requirements</label>
+                          <label>Dietary Preferences</label>
+                          <div className="admin-dietary-preferences">
+                            <label className="admin-dietary-checkbox">
+                              <input
+                                type="checkbox"
+                                checked={editingRSVP.vegetarian || false}
+                                onChange={(e) => setEditingRSVP({ ...editingRSVP, vegetarian: e.target.checked })}
+                              />
+                              <span>Vegetarian</span>
+                            </label>
+                            <label className="admin-dietary-checkbox">
+                              <input
+                                type="checkbox"
+                                checked={editingRSVP.vegan || false}
+                                onChange={(e) => setEditingRSVP({ ...editingRSVP, vegan: e.target.checked })}
+                              />
+                              <span>Vegan</span>
+                            </label>
+                            <label className="admin-dietary-checkbox">
+                              <input
+                                type="checkbox"
+                                checked={editingRSVP.glutenIntolerant || false}
+                                onChange={(e) => setEditingRSVP({ ...editingRSVP, glutenIntolerant: e.target.checked })}
+                              />
+                              <span>Gluten Intolerant</span>
+                            </label>
+                            <label className="admin-dietary-checkbox">
+                              <input
+                                type="checkbox"
+                                checked={editingRSVP.lactoseIntolerant || false}
+                                onChange={(e) => setEditingRSVP({ ...editingRSVP, lactoseIntolerant: e.target.checked })}
+                              />
+                              <span>Lactose Intolerant</span>
+                            </label>
+                          </div>
+                        </div>
+                        <div className="form-group">
+                          <label>Additional Dietary Requirements</label>
                           <textarea
                             value={editingRSVP.dietaryRequirements || ''}
                             onChange={(e) => setEditingRSVP({ ...editingRSVP, dietaryRequirements: e.target.value })}
-                            placeholder="Dietary requirements, allergies, or special needs"
+                            placeholder="Additional dietary requirements, allergies, or special needs"
                             rows={3}
                             className="admin-textarea"
                           />
@@ -416,7 +474,15 @@ function Admin({ rsvps, menuCategories, tablesCount, seatsPerTable, onUpdateRSVP
                           </h4>
                           <p><strong>Email:</strong> {rsvp.email}</p>
                           <p><strong>Menu Choices:</strong> {rsvp.menuChoices.map(id => getMenuOptionLabel(id)).join(', ')}</p>
-                          <p><strong>Dietary Requirements:</strong> {rsvp.dietaryRequirements || 'None specified'}</p>
+                          <p><strong>Dietary Preferences:</strong> {
+                            [
+                              rsvp.vegetarian && 'Vegetarian',
+                              rsvp.vegan && 'Vegan',
+                              rsvp.glutenIntolerant && 'Gluten Intolerant',
+                              rsvp.lactoseIntolerant && 'Lactose Intolerant'
+                            ].filter(Boolean).join(', ') || 'None'
+                          }</p>
+                          <p><strong>Additional Dietary Requirements:</strong> {rsvp.dietaryRequirements || 'None specified'}</p>
                           {rsvp.table && rsvp.seat ? (
                             <p><strong>Seat:</strong> Table {rsvp.table}, Seat {rsvp.seat}</p>
                           ) : (
@@ -526,7 +592,11 @@ function MenuManagement({ menuCategories, onUpdateMenuCategories }) {
     updated[categoryIndex].options.push({
       id: `${categoryName}-${Date.now()}`,
       label: 'New Option',
-      description: 'Description'
+      description: 'Description',
+      vegetarian: false,
+      vegan: false,
+      glutenFree: false,
+      lactoseFree: false
     })
     setTempMenuCategories(updated)
   }
@@ -580,6 +650,44 @@ function MenuManagement({ menuCategories, onUpdateMenuCategories }) {
                         value={option.description}
                         onChange={(e) => handleUpdateOption(categoryIndex, optionIndex, 'description', e.target.value)}
                       />
+                    </div>
+                    <div className="form-group">
+                      <label>Dietary Information</label>
+                      <div className="admin-menu-dietary-flags">
+                        <label className="admin-menu-dietary-flag">
+                          <input
+                            type="checkbox"
+                            checked={option.vegetarian || false}
+                            onChange={(e) => handleUpdateOption(categoryIndex, optionIndex, 'vegetarian', e.target.checked)}
+                          />
+                          <span>Vegetarian</span>
+                        </label>
+                        <label className="admin-menu-dietary-flag">
+                          <input
+                            type="checkbox"
+                            checked={option.vegan || false}
+                            onChange={(e) => handleUpdateOption(categoryIndex, optionIndex, 'vegan', e.target.checked)}
+                          />
+                          <span>Vegan</span>
+                        </label>
+                        <label className="admin-menu-dietary-flag">
+                          <input
+                            type="checkbox"
+                            checked={option.glutenFree || false}
+                            onChange={(e) => handleUpdateOption(categoryIndex, optionIndex, 'glutenFree', e.target.checked)}
+                          />
+                          <span>Gluten Free</span>
+                        </label>
+                        <label className="admin-menu-dietary-flag">
+                          <input
+                            type="checkbox"
+                            checked={option.lactoseFree || false}
+                            onChange={(e) => handleUpdateOption(categoryIndex, optionIndex, 'lactoseFree', e.target.checked)}
+                          />
+                          <span>Lactose Free</span>
+                        </label>
+                      </div>
+                      <p className="form-help">Check the dietary flags that apply to this menu item.</p>
                     </div>
                     <button 
                       onClick={() => handleRemoveOption(categoryIndex, optionIndex)}

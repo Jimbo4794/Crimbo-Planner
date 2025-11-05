@@ -4,10 +4,8 @@ import RSVPForm from './components/RSVPForm'
 import SeatSelection from './components/SeatSelection'
 import Admin from './components/Admin'
 import { fetchRSVPs, saveRSVPs, fetchMenu, saveMenu, fetchConfig, saveConfig } from './api'
+import { DEFAULT_TABLES_COUNT, DEFAULT_SEATS_PER_TABLE } from './utils/constants'
 import './App.css'
-
-const DEFAULT_TABLES_COUNT = 5
-const DEFAULT_SEATS_PER_TABLE = 8
 
 const DEFAULT_MENU_CATEGORIES = [
   {
@@ -117,6 +115,10 @@ function App() {
       email: rsvpData.email,
       menuChoices: rsvpData.menuChoices,
       dietaryRequirements: rsvpData.dietaryRequirements || '',
+      vegetarian: rsvpData.vegetarian || false,
+      vegan: rsvpData.vegan || false,
+      glutenIntolerant: rsvpData.glutenIntolerant || false,
+      lactoseIntolerant: rsvpData.lactoseIntolerant || false,
       icon: rsvpData.icon || '🎄',
       iconType: rsvpData.iconType || 'emoji',
       seat: null,
@@ -229,8 +231,30 @@ function App() {
     // API will be updated automatically via useEffect
   }
 
-  const handleNewRSVP = () => {
-    setCurrentStep('rsvp')
+  const handleUpdateDietaryPreferences = (email, dietaryPreferences) => {
+    // Find the RSVP by email (case-insensitive)
+    const rsvpIndex = rsvps.findIndex(r => r.email.toLowerCase() === email.toLowerCase())
+    
+    if (rsvpIndex === -1) {
+      alert('Reservation not found!')
+      return
+    }
+
+    // Update the RSVP with new dietary preferences
+    const updatedRSVPs = rsvps.map((r, index) => 
+      index === rsvpIndex
+        ? { 
+            ...r, 
+            vegetarian: dietaryPreferences.vegetarian || false,
+            vegan: dietaryPreferences.vegan || false,
+            glutenIntolerant: dietaryPreferences.glutenIntolerant || false,
+            lactoseIntolerant: dietaryPreferences.lactoseIntolerant || false
+          }
+        : r
+    )
+    
+    setRsvps(updatedRSVPs)
+    // API will be updated automatically via useEffect
   }
 
   const handleBackToMenu = () => {
@@ -330,10 +354,10 @@ function App() {
             tablesCount={tablesCount}
             seatsPerTable={seatsPerTable}
             onSeatSelect={handleSeatSelection}
-            onNewRSVP={handleNewRSVP}
             onChangeSeat={handleChangeSeat}
             onUpdateMenuChoices={handleUpdateMenuChoices}
             onUpdateDietaryRequirements={handleUpdateDietaryRequirements}
+            onUpdateDietaryPreferences={handleUpdateDietaryPreferences}
             onBackToMenu={handleBackToMenu}
             menuCategories={menuCategories}
           />
