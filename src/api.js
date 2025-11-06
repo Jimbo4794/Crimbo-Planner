@@ -52,13 +52,13 @@ export const fetchConfig = async () => {
   return handleResponse(response);
 };
 
-export const saveConfig = async (tablesCount, seatsPerTable) => {
+export const saveConfig = async (tablesCount, seatsPerTable, tablePositions = null, customAreas = null, gridCols = null, gridRows = null, tableDisplayNames = null) => {
   const response = await fetch(`${API_BASE}/config`, {
     method: 'PUT',
     headers: {
       'Content-Type': 'application/json',
     },
-    body: JSON.stringify({ tablesCount, seatsPerTable }),
+    body: JSON.stringify({ tablesCount, seatsPerTable, tablePositions, customAreas, gridCols, gridRows, tableDisplayNames }),
   });
   return handleResponse(response);
 };

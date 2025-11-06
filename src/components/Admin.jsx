@@ -6,7 +6,7 @@ import { AVAILABLE_ICONS, MAX_IMAGE_SIZE } from '../utils/constants'
 // Get admin password from environment variable, fallback to default
 const ADMIN_PASSWORD = import.meta.env.VITE_ADMIN_PASSWORD || 'admin123'
 
-function Admin({ rsvps, menuCategories, tablesCount, seatsPerTable, onUpdateRSVPs, onUpdateMenuCategories, onUpdateTablesCount, onUpdateSeatsPerTable, onBackToMenu }) {
+function Admin({ rsvps, menuCategories, tablesCount, seatsPerTable, tablePositions, customAreas, gridCols, gridRows, onUpdateRSVPs, onUpdateMenuCategories, onUpdateTablesCount, onUpdateSeatsPerTable, onUpdateTablePositions, onUpdateCustomAreas, onUpdateGridCols, onUpdateGridRows, onBackToMenu }) {
   // Helper function to get menu option label by ID
   const getMenuOptionLabel = (menuId) => {
     for (const category of menuCategories) {
@@ -18,7 +18,7 @@ function Admin({ rsvps, menuCategories, tablesCount, seatsPerTable, onUpdateRSVP
   const [isAuthenticated, setIsAuthenticated] = useState(false)
   const [password, setPassword] = useState('')
   const [passwordError, setPasswordError] = useState('')
-  const [activeTab, setActiveTab] = useState('users') // 'users', 'menu', 'seating', or 'storage'
+  const [activeTab, setActiveTab] = useState('users') // 'users', 'menu', 'seating', 'arrangement', or 'storage'
   const [editingRSVP, setEditingRSVP] = useState(null)
   const [editingMenu, setEditingMenu] = useState(false)
 
@@ -210,9 +210,6 @@ function Admin({ rsvps, menuCategories, tablesCount, seatsPerTable, onUpdateRSVP
             </div>
             <button type="submit" className="login-button">Login</button>
           </form>
-          {onBackToMenu && (
-            <button onClick={onBackToMenu} className="back-button">Back to Menu</button>
-          )}
         </div>
       </div>
     )
@@ -243,6 +240,12 @@ function Admin({ rsvps, menuCategories, tablesCount, seatsPerTable, onUpdateRSVP
           onClick={() => setActiveTab('seating')}
         >
           Seating Configuration
+        </button>
+        <button
+          className={`tab-button ${activeTab === 'arrangement' ? 'active' : ''}`}
+          onClick={() => setActiveTab('arrangement')}
+        >
+          Table Arrangement
         </button>
         <button
           className={`tab-button ${activeTab === 'storage' ? 'active' : ''}`}
@@ -519,6 +522,20 @@ function Admin({ rsvps, menuCategories, tablesCount, seatsPerTable, onUpdateRSVP
           />
         )}
 
+        {activeTab === 'arrangement' && (
+          <TableArrangement
+            tablesCount={tablesCount}
+            tablePositions={tablePositions}
+            customAreas={customAreas}
+            gridCols={gridCols}
+            gridRows={gridRows}
+            onUpdateTablePositions={onUpdateTablePositions}
+            onUpdateCustomAreas={onUpdateCustomAreas}
+            onUpdateGridCols={onUpdateGridCols}
+            onUpdateGridRows={onUpdateGridRows}
+          />
+        )}
+
         {activeTab === 'storage' && (
           <StorageManagement
             rsvps={rsvps}
@@ -532,12 +549,6 @@ function Admin({ rsvps, menuCategories, tablesCount, seatsPerTable, onUpdateRSVP
           />
         )}
       </div>
-
-      {onBackToMenu && (
-        <div className="admin-footer">
-          <button onClick={onBackToMenu} className="back-button">Back to Menu</button>
-        </div>
-      )}
     </div>
   )
 }
@@ -1008,6 +1019,447 @@ function StorageManagement({ rsvps, menuCategories, tablesCount, seatsPerTable, 
             🗑️ Clear All Data
           </button>
         </div>
+      </div>
+    </div>
+  )
+}
+
+function TableArrangement({ tablesCount, tablePositions, customAreas, gridCols = 12, gridRows = 8, onUpdateTablePositions, onUpdateCustomAreas, onUpdateGridCols, onUpdateGridRows }) {
+  const GRID_COLS = gridCols
+  const GRID_ROWS = gridRows
+  const [editingPositions, setEditingPositions] = useState(() => {
+    // Initialize positions from saved data or create default grid positions
+    if (tablePositions && Array.isArray(tablePositions)) {
+      return [...tablePositions]
+    }
+    // Default: arrange tables in a grid
+    const positions = []
+    const colsPerRow = Math.ceil(Math.sqrt(tablesCount))
+    for (let i = 0; i < tablesCount; i++) {
+      const row = Math.floor(i / colsPerRow)
+      const col = i % colsPerRow
+      positions.push({
+        tableNumber: i + 1,
+        x: Math.max(1, Math.min(GRID_COLS - 1, col * 2 + 2)),
+        y: Math.max(1, Math.min(GRID_ROWS - 1, row * 2 + 2))
+      })
+    }
+    return positions
+  })
+  const [editingAreas, setEditingAreas] = useState(() => {
+    // Initialize areas with default width/height if not present
+    if (customAreas && Array.isArray(customAreas)) {
+      return customAreas.map(area => ({
+        ...area,
+        width: area.width || 1,
+        height: area.height || 1
+      }))
+    }
+    return []
+  })
+  const [draggedTable, setDraggedTable] = useState(null)
+  const [draggedArea, setDraggedArea] = useState(null)
+  const [resizingArea, setResizingArea] = useState(null)
+  const [dragOffset, setDragOffset] = useState({ x: 0, y: 0 })
+  const [resizeStart, setResizeStart] = useState({ x: 0, y: 0, width: 0, height: 0 })
+  const [newAreaLabel, setNewAreaLabel] = useState('')
+  const [editingAreaId, setEditingAreaId] = useState(null)
+
+  const handleSave = () => {
+    onUpdateTablePositions(editingPositions)
+    onUpdateCustomAreas(editingAreas.length > 0 ? editingAreas : null)
+    alert('Table arrangement saved!')
+  }
+
+  const handleReset = () => {
+    // Reset to default grid
+    const positions = []
+    const colsPerRow = Math.ceil(Math.sqrt(tablesCount))
+    for (let i = 0; i < tablesCount; i++) {
+      const row = Math.floor(i / colsPerRow)
+      const col = i % colsPerRow
+      positions.push({
+        tableNumber: i + 1,
+        x: Math.max(1, Math.min(GRID_COLS - 1, col * 2 + 2)),
+        y: Math.max(1, Math.min(GRID_ROWS - 1, row * 2 + 2))
+      })
+    }
+    setEditingPositions(positions)
+  }
+
+  const handleClear = () => {
+    if (window.confirm('Clear all table positions and custom areas? Tables will use default grid layout.')) {
+      onUpdateTablePositions(null)
+      onUpdateCustomAreas(null)
+      setEditingPositions([])
+      setEditingAreas([])
+      alert('Table arrangement cleared!')
+    }
+  }
+
+  const handleAddArea = () => {
+    if (!newAreaLabel.trim()) {
+      alert('Please enter a label for the area')
+      return
+    }
+    const newArea = {
+      id: Date.now().toString(),
+      label: newAreaLabel.trim(),
+      x: 0,
+      y: 0,
+      width: 1,
+      height: 1
+    }
+    setEditingAreas([...editingAreas, newArea])
+    setNewAreaLabel('')
+  }
+
+  const handleDeleteArea = (areaId) => {
+    if (window.confirm('Delete this custom area?')) {
+      setEditingAreas(editingAreas.filter(area => area.id !== areaId))
+    }
+  }
+
+  const handleEditAreaLabel = (areaId, newLabel) => {
+    if (!newLabel.trim()) {
+      return
+    }
+    setEditingAreas(editingAreas.map(area => 
+      area.id === areaId ? { ...area, label: newLabel.trim() } : area
+    ))
+    setEditingAreaId(null)
+  }
+
+  const handleAreaResizeStart = (e, areaId) => {
+    e.preventDefault()
+    e.stopPropagation()
+    const area = editingAreas.find(a => a.id === areaId)
+    if (!area) return
+    
+    const grid = document.querySelector('.table-arrangement-grid')
+    if (!grid) return
+    
+    const gridRect = grid.getBoundingClientRect()
+    const cellSize = getGridCellSize()
+    const startX = e.clientX
+    const startY = e.clientY
+    
+    setResizeStart({
+      x: area.x * cellSize,
+      y: area.y * cellSize,
+      width: (area.width || 1) * cellSize,
+      height: (area.height || 1) * cellSize,
+      startClientX: startX,
+      startClientY: startY
+    })
+    setResizingArea(areaId)
+    setDraggedArea(null)
+  }
+
+  const getGridCellSize = () => {
+    return 60 // pixels per grid cell
+  }
+
+  const handleMouseDown = (e, tableNumber) => {
+    e.preventDefault()
+    const rect = e.currentTarget.getBoundingClientRect()
+    setDragOffset({
+      x: e.clientX - rect.left,
+      y: e.clientY - rect.top
+    })
+    setDraggedTable(tableNumber)
+    setDraggedArea(null)
+  }
+
+  const handleAreaMouseDown = (e, areaId) => {
+    e.preventDefault()
+    const rect = e.currentTarget.getBoundingClientRect()
+    setDragOffset({
+      x: e.clientX - rect.left,
+      y: e.clientY - rect.top
+    })
+    setDraggedArea(areaId)
+    setDraggedTable(null)
+  }
+
+  const handleMouseMove = (e) => {
+    const grid = document.querySelector('.table-arrangement-grid')
+    if (!grid) return
+    
+    const gridRect = grid.getBoundingClientRect()
+    const cellSize = getGridCellSize()
+    
+    if (resizingArea) {
+      // Handle resize
+      const deltaX = e.clientX - resizeStart.startClientX
+      const deltaY = e.clientY - resizeStart.startClientY
+      
+      const newWidth = Math.max(cellSize, resizeStart.width + deltaX)
+      const newHeight = Math.max(cellSize, resizeStart.height + deltaY)
+      
+      const widthInCells = Math.round(newWidth / cellSize)
+      const heightInCells = Math.round(newHeight / cellSize)
+      
+      setEditingAreas(prev => {
+        return prev.map(area => {
+          if (area.id === resizingArea) {
+            const updated = {
+              ...area,
+              width: Math.max(1, Math.min(GRID_COLS - area.x, widthInCells)),
+              height: Math.max(1, Math.min(GRID_ROWS - area.y, heightInCells))
+            }
+            // Ensure area doesn't go outside grid bounds
+            if (updated.x + updated.width > GRID_COLS) {
+              updated.width = Math.max(1, GRID_COLS - updated.x)
+            }
+            if (updated.y + updated.height > GRID_ROWS) {
+              updated.height = Math.max(1, GRID_ROWS - updated.y)
+            }
+            return updated
+          }
+          return area
+        })
+      })
+    } else {
+      // Handle drag
+      const x = Math.round((e.clientX - gridRect.left - dragOffset.x + cellSize / 2) / cellSize)
+      const y = Math.round((e.clientY - gridRect.top - dragOffset.y + cellSize / 2) / cellSize)
+      
+      const clampedX = Math.max(0, Math.min(GRID_COLS - 1, x))
+      const clampedY = Math.max(0, Math.min(GRID_ROWS - 1, y))
+      
+      if (draggedTable) {
+        setEditingPositions(prev => {
+          const updated = prev.map(pos => 
+            pos.tableNumber === draggedTable 
+              ? { ...pos, x: clampedX, y: clampedY }
+              : pos
+          )
+          // If table doesn't exist, add it
+          if (!updated.find(p => p.tableNumber === draggedTable)) {
+            updated.push({ tableNumber: draggedTable, x: clampedX, y: clampedY })
+          }
+          return updated
+        })
+      } else if (draggedArea) {
+        setEditingAreas(prev => {
+          return prev.map(area => {
+            if (area.id === draggedArea) {
+              const width = area.width || 1
+              const height = area.height || 1
+              // Ensure area doesn't go outside grid bounds
+              const maxX = Math.max(0, GRID_COLS - width)
+              const maxY = Math.max(0, GRID_ROWS - height)
+              return { 
+                ...area, 
+                x: Math.min(clampedX, maxX), 
+                y: Math.min(clampedY, maxY)
+              }
+            }
+            return area
+          })
+        })
+      }
+    }
+  }
+
+  const handleMouseUp = () => {
+    setDraggedTable(null)
+    setDraggedArea(null)
+    setResizingArea(null)
+  }
+
+  useEffect(() => {
+    if (draggedTable || draggedArea || resizingArea) {
+      const moveHandler = (e) => handleMouseMove(e)
+      const upHandler = () => handleMouseUp()
+      document.addEventListener('mousemove', moveHandler)
+      document.addEventListener('mouseup', upHandler)
+      return () => {
+        document.removeEventListener('mousemove', moveHandler)
+        document.removeEventListener('mouseup', upHandler)
+      }
+    }
+  }, [draggedTable, draggedArea, resizingArea, dragOffset, resizeStart])
+
+  const cellSize = getGridCellSize()
+
+  return (
+    <div className="table-arrangement-section">
+      <div className="table-arrangement-header">
+        <h3>Table Arrangement</h3>
+        <div className="table-arrangement-actions">
+          <button onClick={handleSave} className="save-button">Save Arrangement</button>
+          <button onClick={handleReset} className="cancel-button">Reset to Grid</button>
+          <button onClick={handleClear} className="cancel-button">Clear Arrangement</button>
+        </div>
+      </div>
+      
+      <div className="grid-size-controls">
+        <div className="grid-size-control-group">
+          <label htmlFor="grid-cols">Grid Columns (X):</label>
+          <input
+            type="number"
+            id="grid-cols"
+            min="4"
+            max="24"
+            value={GRID_COLS}
+            onChange={(e) => {
+              const value = parseInt(e.target.value, 10)
+              if (!isNaN(value) && value >= 4 && value <= 24) {
+                onUpdateGridCols(value)
+              }
+            }}
+            className="grid-size-input"
+          />
+        </div>
+        <div className="grid-size-control-group">
+          <label htmlFor="grid-rows">Grid Rows (Y):</label>
+          <input
+            type="number"
+            id="grid-rows"
+            min="4"
+            max="24"
+            value={GRID_ROWS}
+            onChange={(e) => {
+              const value = parseInt(e.target.value, 10)
+              if (!isNaN(value) && value >= 4 && value <= 24) {
+                onUpdateGridRows(value)
+              }
+            }}
+            className="grid-size-input"
+          />
+        </div>
+      </div>
+      
+      <p className="arrangement-description">
+        Drag tables and custom areas to position them on the room layout. The arrangement will be saved and used in the seating plan view.
+      </p>
+
+      <div className="custom-areas-controls">
+        <div className="add-area-control">
+          <input
+            type="text"
+            value={newAreaLabel}
+            onChange={(e) => setNewAreaLabel(e.target.value)}
+            placeholder="Enter area label (e.g., Entrance, Bar, Stage)"
+            className="area-label-input"
+            onKeyPress={(e) => {
+              if (e.key === 'Enter') {
+                handleAddArea()
+              }
+            }}
+          />
+          <button onClick={handleAddArea} className="add-area-button">Add Area</button>
+        </div>
+      </div>
+
+      <div className="table-arrangement-grid" style={{ width: GRID_COLS * cellSize, height: GRID_ROWS * cellSize }}>
+        {/* Grid cells */}
+        {Array.from({ length: GRID_ROWS }, (_, row) =>
+          Array.from({ length: GRID_COLS }, (_, col) => (
+            <div
+              key={`${row}-${col}`}
+              className="grid-cell"
+              style={{
+                position: 'absolute',
+                left: col * cellSize,
+                top: row * cellSize,
+                width: cellSize,
+                height: cellSize
+              }}
+            />
+          ))
+        )}
+        
+        {/* Tables */}
+        {Array.from({ length: tablesCount }, (_, i) => {
+          const tableNumber = i + 1
+          const position = editingPositions.find(p => p.tableNumber === tableNumber) || { x: 0, y: 0 }
+          return (
+            <div
+              key={tableNumber}
+              className={`arrangement-table ${draggedTable === tableNumber ? 'dragging' : ''}`}
+              style={{
+                position: 'absolute',
+                left: position.x * cellSize,
+                top: position.y * cellSize,
+                width: cellSize,
+                height: cellSize,
+                cursor: 'move'
+              }}
+              onMouseDown={(e) => handleMouseDown(e, tableNumber)}
+            >
+              <div className="arrangement-table-label">T{tableNumber}</div>
+            </div>
+          )
+        })}
+        
+        {/* Custom Areas */}
+        {editingAreas.map(area => {
+          const areaWidth = (area.width || 1) * cellSize
+          const areaHeight = (area.height || 1) * cellSize
+          return (
+            <div
+              key={area.id}
+              className={`arrangement-area ${draggedArea === area.id ? 'dragging' : ''} ${resizingArea === area.id ? 'resizing' : ''}`}
+              style={{
+                position: 'absolute',
+                left: area.x * cellSize,
+                top: area.y * cellSize,
+                width: areaWidth,
+                height: areaHeight,
+                cursor: draggedArea === area.id ? 'move' : 'default'
+              }}
+              onMouseDown={(e) => {
+                // Only handle drag if not clicking on resize handle or delete button
+                if (!e.target.closest('.area-resize-handle') && !e.target.closest('.delete-area-button')) {
+                  handleAreaMouseDown(e, area.id)
+                }
+              }}
+            >
+              {editingAreaId === area.id ? (
+                <input
+                  type="text"
+                  defaultValue={area.label}
+                  className="area-label-edit"
+                  autoFocus
+                  onBlur={(e) => handleEditAreaLabel(area.id, e.target.value)}
+                  onKeyPress={(e) => {
+                    if (e.key === 'Enter') {
+                      handleEditAreaLabel(area.id, e.target.value)
+                    }
+                  }}
+                  onClick={(e) => e.stopPropagation()}
+                />
+              ) : (
+                <>
+                  <div 
+                    className="arrangement-area-label"
+                    onDoubleClick={() => setEditingAreaId(area.id)}
+                  >
+                    {area.label}
+                  </div>
+                  <div 
+                    className="area-resize-handle"
+                    onMouseDown={(e) => handleAreaResizeStart(e, area.id)}
+                    title="Drag to resize"
+                  />
+                  <button
+                    className="delete-area-button"
+                    onClick={(e) => {
+                      e.stopPropagation()
+                      handleDeleteArea(area.id)
+                    }}
+                    title="Delete area"
+                  >
+                    ×
+                  </button>
+                </>
+              )}
+            </div>
+          )
+        })}
       </div>
     </div>
   )

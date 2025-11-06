@@ -43,6 +43,11 @@ function App() {
   const [menuCategories, setMenuCategories] = useState(DEFAULT_MENU_CATEGORIES)
   const [tablesCount, setTablesCount] = useState(DEFAULT_TABLES_COUNT)
   const [seatsPerTable, setSeatsPerTable] = useState(DEFAULT_SEATS_PER_TABLE)
+  const [tablePositions, setTablePositions] = useState(null) // Array of {tableNumber, x, y} or null for default grid
+  const [customAreas, setCustomAreas] = useState(null) // Array of {id, label, x, y} for custom labeled areas
+  const [gridCols, setGridCols] = useState(12) // Number of columns in arrangement grid
+  const [gridRows, setGridRows] = useState(8) // Number of rows in arrangement grid
+  const [tableDisplayNames, setTableDisplayNames] = useState(null) // Object mapping tableNumber to display name
   const [currentStep, setCurrentStep] = useState('menu') // 'menu', 'rsvp', 'seating', or 'admin'
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState(null)
@@ -67,6 +72,11 @@ function App() {
         }
         setTablesCount(configData.tablesCount || DEFAULT_TABLES_COUNT)
         setSeatsPerTable(configData.seatsPerTable || DEFAULT_SEATS_PER_TABLE)
+        setTablePositions(configData.tablePositions || null)
+        setCustomAreas(configData.customAreas || null)
+        setGridCols(configData.gridCols || 12)
+        setGridRows(configData.gridRows || 8)
+        setTableDisplayNames(configData.tableDisplayNames || null)
       } catch (err) {
         console.error('Error loading data:', err)
         setError('Failed to load data. Please refresh the page.')
@@ -98,15 +108,15 @@ function App() {
     }
   }, [menuCategories, loading])
 
-  // Save to API whenever tables count or seats per table changes
+  // Save to API whenever tables count, seats per table, table positions, custom areas, grid size, or table display names change
   useEffect(() => {
     if (!loading) {
-      saveConfig(tablesCount, seatsPerTable).catch(err => {
+      saveConfig(tablesCount, seatsPerTable, tablePositions, customAreas, gridCols, gridRows, tableDisplayNames).catch(err => {
         console.error('Error saving config:', err)
         setError('Failed to save configuration. Please try again.')
       })
     }
-  }, [tablesCount, seatsPerTable, loading])
+  }, [tablesCount, seatsPerTable, tablePositions, customAreas, gridCols, gridRows, tableDisplayNames, loading])
 
   const handleRSVPSubmit = (rsvpData) => {
     const newRSVP = {
@@ -306,8 +316,17 @@ function App() {
   return (
     <div className="app">
       <header className="app-header">
-        <h1>🎄 Crimbo Planner</h1>
-        <p className="subtitle">Christmas Party RSVP & Seating</p>
+        <div className="app-header-content">
+          <div>
+            <h1>🎄 Crimbo Planner</h1>
+            <p className="subtitle">Christmas Party RSVP & Seating</p>
+          </div>
+          {currentStep !== 'menu' && (
+            <button onClick={handleBackToMenu} className="header-back-button">
+              Back to Menu
+            </button>
+          )}
+        </div>
       </header>
       {error && (
         <div style={{ 
@@ -335,6 +354,7 @@ function App() {
             onSubmit={handleRSVPSubmit} 
             onBackToMenu={handleBackToMenu}
             menuCategories={menuCategories}
+            existingRSVPs={rsvps}
           />
         ) : currentStep === 'admin' ? (
           <Admin 
@@ -342,10 +362,18 @@ function App() {
             menuCategories={menuCategories}
             tablesCount={tablesCount}
             seatsPerTable={seatsPerTable}
+            tablePositions={tablePositions}
+            customAreas={customAreas}
+            gridCols={gridCols}
+            gridRows={gridRows}
             onUpdateRSVPs={handleUpdateRSVPs}
             onUpdateMenuCategories={handleUpdateMenuCategories}
             onUpdateTablesCount={handleUpdateTablesCount}
             onUpdateSeatsPerTable={handleUpdateSeatsPerTable}
+            onUpdateTablePositions={setTablePositions}
+            onUpdateCustomAreas={setCustomAreas}
+            onUpdateGridCols={setGridCols}
+            onUpdateGridRows={setGridRows}
             onBackToMenu={handleBackToMenu}
           />
         ) : (
@@ -353,12 +381,18 @@ function App() {
             rsvps={rsvps}
             tablesCount={tablesCount}
             seatsPerTable={seatsPerTable}
+            tablePositions={tablePositions}
+            customAreas={customAreas}
+            gridCols={gridCols}
+            gridRows={gridRows}
+            tableDisplayNames={tableDisplayNames}
             onSeatSelect={handleSeatSelection}
             onChangeSeat={handleChangeSeat}
             onUpdateMenuChoices={handleUpdateMenuChoices}
             onUpdateDietaryRequirements={handleUpdateDietaryRequirements}
             onUpdateDietaryPreferences={handleUpdateDietaryPreferences}
             onBackToMenu={handleBackToMenu}
+            onNavigate={handleNavigate}
             menuCategories={menuCategories}
           />
         )}

@@ -4,7 +4,7 @@ import ImageCropper from './ImageCropper'
 import { AVAILABLE_ICONS, MAX_IMAGE_SIZE } from '../utils/constants'
 import { conflictsWithDietaryPreferences } from '../utils/dietaryConflicts'
 
-function RSVPForm({ onSubmit, onBackToMenu, menuCategories = [] }) {
+function RSVPForm({ onSubmit, onBackToMenu, menuCategories = [], existingRSVPs = [] }) {
   const [name, setName] = useState('')
   const [email, setEmail] = useState('')
   const [menuChoices, setMenuChoices] = useState([])
@@ -210,6 +210,14 @@ function RSVPForm({ onSubmit, onBackToMenu, menuCategories = [] }) {
       newErrors.email = 'Email is required'
     } else if (!validateEmail(email)) {
       newErrors.email = 'Please enter a valid email address'
+    } else {
+      // Check if email already exists (case-insensitive)
+      const emailExists = existingRSVPs.some(rsvp => 
+        rsvp.email && rsvp.email.toLowerCase() === email.toLowerCase()
+      )
+      if (emailExists) {
+        newErrors.email = 'This email address is already registered. Please use a different email or look up your existing reservation.'
+      }
     }
 
     // Check if user has selected one option from each category
@@ -269,9 +277,20 @@ function RSVPForm({ onSubmit, onBackToMenu, menuCategories = [] }) {
             id="email"
             value={email}
             onChange={(e) => {
-              setEmail(e.target.value)
+              const newEmail = e.target.value
+              setEmail(newEmail)
+              // Clear error when user starts typing
               if (errors.email) {
                 setErrors({ ...errors, email: null })
+              }
+              // Real-time validation: check for duplicate email (only if email is valid format)
+              if (newEmail && validateEmail(newEmail)) {
+                const emailExists = existingRSVPs.some(rsvp => 
+                  rsvp.email && rsvp.email.toLowerCase() === newEmail.toLowerCase()
+                )
+                if (emailExists) {
+                  setErrors({ ...errors, email: 'This email address is already registered. Please use a different email or look up your existing reservation.' })
+                }
               }
             }}
             placeholder="your.email@example.com"
@@ -457,11 +476,6 @@ function RSVPForm({ onSubmit, onBackToMenu, menuCategories = [] }) {
         </div>
 
         <div className="form-actions">
-          {onBackToMenu && (
-            <button type="button" onClick={onBackToMenu} className="back-button">
-              Back to Menu
-            </button>
-          )}
           <button type="submit" className="submit-button">
             Submit RSVP
           </button>

@@ -1094,6 +1094,282 @@
   font-size: 0.875rem;
 }
 
+/* Table Arrangement Styles */
+.table-arrangement-section {
+  padding: 1rem 0;
+}
+
+.table-arrangement-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-bottom: 1.5rem;
+}
+
+.table-arrangement-actions {
+  display: flex;
+  gap: 0.75rem;
+}
+
+.grid-size-controls {
+  display: flex;
+  gap: 1.5rem;
+  margin-bottom: 1.5rem;
+  padding: 1rem;
+  background: rgba(15, 23, 42, 0.6);
+  border: 1px solid var(--border-color);
+  border-radius: var(--radius);
+  align-items: center;
+}
+
+.grid-size-control-group {
+  display: flex;
+  align-items: center;
+  gap: 0.75rem;
+}
+
+.grid-size-control-group label {
+  color: var(--text-color);
+  font-size: 0.875rem;
+  font-weight: 500;
+  white-space: nowrap;
+}
+
+.grid-size-input {
+  width: 80px;
+  padding: 0.5rem 0.75rem;
+  border: 1px solid var(--border-color);
+  border-radius: var(--radius);
+  font-size: 0.9375rem;
+  background: rgba(15, 23, 42, 0.6);
+  color: var(--text-color);
+  transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+}
+
+.grid-size-input:focus {
+  outline: none;
+  border-color: var(--primary-color);
+  box-shadow: 0 0 0 3px var(--primary-glow), var(--shadow-glow);
+  background: rgba(15, 23, 42, 0.8);
+}
+
+.arrangement-description {
+  color: var(--text-light);
+  font-size: 0.875rem;
+  margin-bottom: 1.5rem;
+  line-height: 1.5;
+}
+
+.table-arrangement-grid {
+  position: relative;
+  background: rgba(15, 23, 42, 0.4);
+  border: 2px solid var(--border-color);
+  border-radius: var(--radius);
+  margin: 0 auto;
+  overflow: visible;
+}
+
+.grid-cell {
+  border: 1px solid rgba(255, 255, 255, 0.05);
+  box-sizing: border-box;
+}
+
+.arrangement-table {
+  background: linear-gradient(135deg, var(--primary-color) 0%, var(--primary-hover) 100%);
+  border: 2px solid var(--primary-color);
+  border-radius: var(--radius);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  box-shadow: var(--shadow-md), 0 0 15px var(--primary-glow);
+  transition: all 0.2s ease;
+  z-index: 10;
+}
+
+.arrangement-table:hover {
+  transform: scale(1.1);
+  box-shadow: var(--shadow-lg), 0 0 25px var(--primary-glow);
+}
+
+.arrangement-table.dragging {
+  opacity: 0.8;
+  z-index: 100;
+  transform: scale(1.15);
+}
+
+.arrangement-table-label {
+  color: white;
+  font-weight: 600;
+  font-size: 0.875rem;
+  pointer-events: none;
+  user-select: none;
+}
+
+.custom-areas-controls {
+  margin-bottom: 1.5rem;
+  padding: 1rem;
+  background: rgba(15, 23, 42, 0.6);
+  border: 1px solid var(--border-color);
+  border-radius: var(--radius);
+}
+
+.add-area-control {
+  display: flex;
+  gap: 0.75rem;
+  align-items: center;
+}
+
+.area-label-input {
+  flex: 1;
+  padding: 0.625rem 0.875rem;
+  border: 1px solid var(--border-color);
+  border-radius: var(--radius);
+  font-size: 0.9375rem;
+  background: rgba(15, 23, 42, 0.6);
+  color: var(--text-color);
+  transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+}
+
+.area-label-input:focus {
+  outline: none;
+  border-color: var(--primary-color);
+  box-shadow: 0 0 0 3px var(--primary-glow), var(--shadow-glow);
+  background: rgba(15, 23, 42, 0.8);
+}
+
+.add-area-button {
+  background: linear-gradient(135deg, var(--success-color) 0%, #059669 100%);
+  color: white;
+  border: none;
+  padding: 0.625rem 1.25rem;
+  border-radius: var(--radius);
+  font-size: 0.875rem;
+  font-weight: 500;
+  cursor: pointer;
+  transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+  box-shadow: var(--shadow-sm), 0 0 15px var(--success-glow);
+  white-space: nowrap;
+}
+
+.add-area-button:hover {
+  background: linear-gradient(135deg, #059669 0%, var(--success-color) 100%);
+  box-shadow: var(--shadow-md), 0 0 25px var(--success-glow);
+  transform: translateY(-2px);
+}
+
+.arrangement-area {
+  background: linear-gradient(135deg, var(--success-color) 0%, #059669 100%);
+  border: 2px solid var(--success-color);
+  border-radius: var(--radius);
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  box-shadow: var(--shadow-md), 0 0 15px var(--success-glow);
+  transition: all 0.2s ease;
+  z-index: 10;
+  position: relative;
+  padding: 0.25rem;
+  box-sizing: border-box;
+}
+
+.arrangement-area:hover {
+  transform: scale(1.1);
+  box-shadow: var(--shadow-lg), 0 0 25px var(--success-glow);
+}
+
+.arrangement-area.dragging {
+  opacity: 0.8;
+  z-index: 100;
+  transform: scale(1.15);
+}
+
+.arrangement-area.resizing {
+  opacity: 0.9;
+  z-index: 100;
+}
+
+.arrangement-area-label {
+  color: white;
+  font-weight: 600;
+  font-size: 0.75rem;
+  pointer-events: none;
+  user-select: none;
+  text-align: center;
+  padding: 0.25rem;
+  word-break: break-word;
+  line-height: 1.2;
+  margin-bottom: 0.25rem;
+}
+
+.area-resize-handle {
+  position: absolute;
+  bottom: 0;
+  right: 0;
+  width: 16px;
+  height: 16px;
+  background: rgba(255, 255, 255, 0.9);
+  border: 2px solid var(--success-color);
+  border-radius: 0 0 var(--radius) 0;
+  cursor: nwse-resize;
+  z-index: 20;
+  pointer-events: auto;
+  box-shadow: 0 0 4px rgba(0, 0, 0, 0.3);
+  transition: all 0.2s ease;
+}
+
+.area-resize-handle:hover {
+  background: white;
+  transform: scale(1.2);
+  box-shadow: 0 0 8px var(--success-glow);
+}
+
+.arrangement-area.dragging .area-resize-handle {
+  opacity: 0.8;
+}
+
+.delete-area-button {
+  position: absolute;
+  top: -8px;
+  right: -8px;
+  background: linear-gradient(135deg, var(--error-color) 0%, #dc2626 100%);
+  color: white;
+  border: none;
+  border-radius: 50%;
+  width: 20px;
+  height: 20px;
+  font-size: 0.875rem;
+  font-weight: 600;
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  box-shadow: var(--shadow-sm), 0 0 10px var(--error-glow);
+  transition: all 0.2s ease;
+  z-index: 20;
+  padding: 0;
+  line-height: 1;
+}
+
+.delete-area-button:hover {
+  background: linear-gradient(135deg, #dc2626 0%, var(--error-color) 100%);
+  box-shadow: var(--shadow-md), 0 0 15px var(--error-glow);
+  transform: scale(1.2);
+}
+
+.area-label-edit {
+  width: 100%;
+  padding: 0.25rem;
+  border: 2px solid var(--primary-color);
+  border-radius: var(--radius);
+  font-size: 0.75rem;
+  font-weight: 600;
+  background: white;
+  color: var(--text-color);
+  text-align: center;
+  z-index: 30;
+}
+
 @media (max-width: 768px) {
   .admin-container {
     padding: 1.5rem;
@@ -1145,5 +1421,43 @@
 
   .seating-config-form {
     max-width: 100%;
+  }
+
+  .table-arrangement-header {
+    flex-direction: column;
+    align-items: flex-start;
+    gap: 1rem;
+  }
+
+  .table-arrangement-actions {
+    flex-direction: column;
+    width: 100%;
+  }
+
+  .table-arrangement-actions button {
+    width: 100%;
+  }
+
+  .add-area-control {
+    flex-direction: column;
+  }
+
+  .add-area-button {
+    width: 100%;
+  }
+
+  .grid-size-controls {
+    flex-direction: column;
+    align-items: flex-start;
+    gap: 1rem;
+  }
+
+  .grid-size-control-group {
+    width: 100%;
+    justify-content: space-between;
+  }
+
+  .grid-size-input {
+    width: 100px;
   }
 }

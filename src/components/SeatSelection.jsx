@@ -1,12 +1,15 @@
 import { useState, useEffect, useRef } from 'react'
+import { createPortal } from 'react-dom'
 import './SeatSelection.css'
 import { conflictsWithDietaryPreferences } from '../utils/dietaryConflicts'
 import { AUTO_SIGNIN_TIMEOUT } from '../utils/constants'
 
-function SeatSelection({ rsvps, tablesCount = 5, seatsPerTable = 8, onSeatSelect, onChangeSeat, onUpdateMenuChoices, onUpdateDietaryRequirements, onUpdateDietaryPreferences, onBackToMenu, menuCategories = [] }) {
+function SeatSelection({ rsvps, tablesCount = 5, seatsPerTable = 8, tablePositions = null, customAreas = null, gridCols = 12, gridRows = 8, tableDisplayNames = null, onSeatSelect, onChangeSeat, onUpdateMenuChoices, onUpdateDietaryRequirements, onUpdateDietaryPreferences, onBackToMenu, onNavigate, menuCategories = [] }) {
   const [lookupEmail, setLookupEmail] = useState('')
   const [lookupError, setLookupError] = useState('')
   const [foundRSVP, setFoundRSVP] = useState(null)
+  const [showLookupDialog, setShowLookupDialog] = useState(false)
+  const [expandedTable, setExpandedTable] = useState(null) // Track which table is shown in dialog
   const [editingMenu, setEditingMenu] = useState(false)
   const [tempMenuChoices, setTempMenuChoices] = useState([])
   const [explicitlySignedOut, setExplicitlySignedOut] = useState(false)
@@ -24,6 +27,24 @@ function SeatSelection({ rsvps, tablesCount = 5, seatsPerTable = 8, onSeatSelect
     menuChoicesRef.current = tempMenuChoices
   }, [tempMenuChoices])
 
+  // Handle Escape key to close dialogs
+  useEffect(() => {
+    const handleEscape = (e) => {
+      if (e.key === 'Escape') {
+        if (showLookupDialog) {
+          setShowLookupDialog(false)
+          setLookupEmail('')
+          setLookupError('')
+        }
+        if (expandedTable !== null) {
+          setExpandedTable(null)
+        }
+      }
+    }
+    window.addEventListener('keydown', handleEscape)
+    return () => window.removeEventListener('keydown', handleEscape)
+  }, [showLookupDialog, expandedTable])
+
   // Helper function to get menu option label by ID
   const getMenuOptionLabel = (menuId) => {
     for (const category of menuCategories) {
@@ -32,6 +53,15 @@ function SeatSelection({ rsvps, tablesCount = 5, seatsPerTable = 8, onSeatSelect
     }
     return menuId.charAt(0).toUpperCase() + menuId.slice(1) // Fallback to capitalized ID
   }
+
+  // Helper function to get table display name
+  const getTableDisplayName = (tableNumber) => {
+    if (tableDisplayNames && tableDisplayNames[tableNumber]) {
+      return tableDisplayNames[tableNumber]
+    }
+    return `Table ${tableNumber}`
+  }
+
 
   // Get the latest RSVP (the one that just submitted) - used for display purposes
   const latestRSVP = rsvps.length > 0 ? rsvps[rsvps.length - 1] : null
@@ -72,7 +102,7 @@ function SeatSelection({ rsvps, tablesCount = 5, seatsPerTable = 8, onSeatSelect
   const handleSeatClick = (tableNumber, seatNumber) => {
     // Only allow seat selection if user is signed in
     if (!isSignedIn) {
-      alert('Please look up your reservation first to select a seat.')
+      setShowLookupDialog(true)
       return
     }
 
@@ -141,6 +171,8 @@ function SeatSelection({ rsvps, tablesCount = 5, seatsPerTable = 8, onSeatSelect
     setFoundRSVP(found)
     setExplicitlySignedOut(false) // Reset sign out flag when they look up
     setLookupError('')
+    setShowLookupDialog(false) // Close dialog on successful lookup
+    setLookupEmail('') // Clear email field
   }
 
   const handleSignOut = () => {
@@ -374,7 +406,7 @@ function SeatSelection({ rsvps, tablesCount = 5, seatsPerTable = 8, onSeatSelect
     setTempDietaryRequirements('')
   }
 
-  const renderTable = (tableNumber) => {
+  const renderTableInDialog = (tableNumber) => {
     const seats = []
     // Use responsive sizing - adjust for mobile
     const isMobile = window.innerWidth <= 768
@@ -391,9 +423,6 @@ function SeatSelection({ rsvps, tablesCount = 5, seatsPerTable = 8, onSeatSelect
       
       // Check if this is the current user's seat
       const isMySeat = currentUser && currentUser.table === tableNumber && currentUser.seat === i
-
-      // Allow selection if seat is not occupied (can't select your own seat)
-      const canSelect = !isOccupied && isSignedIn
       
       // Calculate angle for circular positioning (starting from top, going clockwise)
       // Start at -90 degrees (top) and distribute evenly
@@ -404,8 +433,11 @@ function SeatSelection({ rsvps, tablesCount = 5, seatsPerTable = 8, onSeatSelect
       seats.push(
         <div
           key={i}
-          className={`seat ${isOccupied ? 'occupied' : ''} ${!isSignedIn ? 'disabled' : ''} ${isMySeat ? 'my-seat' : ''}`}
-          onClick={() => canSelect && handleSeatClick(tableNumber, i)}
+          className={`seat ${isOccupied ? 'occupied' : ''} ${isMySeat ? 'my-seat' : ''}`}
+          onClick={(e) => {
+            e.stopPropagation() // Prevent dialog close from firing
+            handleSeatClick(tableNumber, i)
+          }}
           style={{
             left: `${x}px`,
             top: `${y}px`
@@ -416,7 +448,7 @@ function SeatSelection({ rsvps, tablesCount = 5, seatsPerTable = 8, onSeatSelect
               : isOccupied 
                 ? `Occupied by ${occupant.name || occupant.email}` 
                 : !isSignedIn 
-                  ? 'Please look up your reservation first' 
+                  ? 'Click to look up your reservation' 
                   : `Seat ${i}`
           }
         >
@@ -440,46 +472,135 @@ function SeatSelection({ rsvps, tablesCount = 5, seatsPerTable = 8, onSeatSelect
     }
 
     return (
-      <div key={tableNumber} className="table-container" data-table-number={tableNumber}>
-        <h3>Table {tableNumber}</h3>
-        <div className="table">{seats}</div>
-        <div className="table-info">
+      <div className="table" style={{ width: `${tableSize}px`, height: `${tableSize}px` }}>
+        {seats}
+      </div>
+    )
+  }
+
+  const renderTable = (tableNumber) => {
+    const handleTableClick = (e) => {
+      // Don't handle table click if clicking on a seat
+      if (e.target.closest('.seat') !== null) {
+        return
+      }
+      
+      // Open table in dialog (allowed for both signed in and not signed in users)
+      setExpandedTable(tableNumber)
+    }
+
+    // Count occupied seats for this table
+    const occupiedCount = Object.keys(occupiedSeats).filter(key => key.startsWith(`${tableNumber}-`)).length
+    
+    // Always show compact card view (table opens in dialog)
+    return (
+      <div 
+        key={tableNumber} 
+        className={`table-card ${!isSignedIn ? 'clickable-table' : ''}`} 
+        data-table-number={tableNumber}
+        onClick={handleTableClick}
+      >
+        <div className="table-card-header">
+          <h3>
+            {getTableDisplayName(tableNumber)}
+          </h3>
+        </div>
+        <div className="table-card-info">
           <span className="seat-count">
-            {Object.keys(occupiedSeats).filter(key => key.startsWith(`${tableNumber}-`)).length} / {seatsPerTable} seats
+            {occupiedCount} / {seatsPerTable} seats
           </span>
         </div>
       </div>
     )
   }
 
+  // Render dialogs using portals to ensure they're outside the container
+  const lookupDialogContent = showLookupDialog && (
+    <div className="dialog-overlay" onClick={() => {
+      setShowLookupDialog(false)
+      setLookupEmail('')
+      setLookupError('')
+    }}>
+      <div className="lookup-dialog" onClick={(e) => e.stopPropagation()}>
+        <h3>Look Up Your Reservation</h3>
+        <p className="lookup-description">Please enter your email address to access the seating plan and select a seat.</p>
+        <form onSubmit={handleLookupEmail}>
+          <div className="form-group">
+            <input
+              type="email"
+              value={lookupEmail}
+              onChange={(e) => {
+                setLookupEmail(e.target.value)
+                setLookupError('')
+              }}
+              placeholder="Enter your email address"
+              className={lookupError ? 'error' : ''}
+              autoFocus
+            />
+            {lookupError && <span className="error-message">{lookupError}</span>}
+          </div>
+          <div className="dialog-actions">
+            <button type="button" onClick={() => {
+              setShowLookupDialog(false)
+              setLookupEmail('')
+              setLookupError('')
+            }} className="cancel-dialog-button">
+              Cancel
+            </button>
+            {onNavigate && (
+              <button 
+                type="button" 
+                onClick={() => {
+                  setShowLookupDialog(false)
+                  setLookupEmail('')
+                  setLookupError('')
+                  onNavigate('rsvp')
+                }} 
+                className="new-rsvp-dialog-button"
+              >
+                Submit New RSVP
+              </button>
+            )}
+            <button type="submit" className="lookup-button">
+              Look Up
+            </button>
+          </div>
+        </form>
+      </div>
+    </div>
+  )
+
+  const tableDialogContent = expandedTable !== null && (
+    <div className="dialog-overlay" onClick={() => setExpandedTable(null)}>
+      <div className="table-dialog" onClick={(e) => e.stopPropagation()}>
+        <div className="table-dialog-header">
+          <h3>{getTableDisplayName(expandedTable)}</h3>
+          <button 
+            className="close-table-dialog-button"
+            onClick={() => setExpandedTable(null)}
+            aria-label="Close table"
+          >
+            ×
+          </button>
+        </div>
+        <div className="table-dialog-content">
+          {renderTableInDialog(expandedTable)}
+        </div>
+        <div className="table-dialog-info">
+          <span className="seat-count">
+            {Object.keys(occupiedSeats).filter(key => key.startsWith(`${expandedTable}-`)).length} / {seatsPerTable} seats
+          </span>
+        </div>
+      </div>
+    </div>
+  )
+
   return (
-    <div className="seat-selection-container">
+    <>
+      <div className="seat-selection-container">
+
       <div className="seat-selection-header">
         <h2>Choose Your Seat</h2>
-        
-        {/* Show email lookup if not signed in */}
-        {!isSignedIn && (
-          <div className="change-seat-form">
-            <h3>Look Up Your Reservation</h3>
-            <p className="lookup-description">Please enter your email address to access the seating plan and select a seat.</p>
-            <form onSubmit={handleLookupEmail}>
-              <div className="form-group-inline">
-                <input
-                  type="email"
-                  value={lookupEmail}
-                  onChange={(e) => {
-                    setLookupEmail(e.target.value)
-                    setLookupError('')
-                  }}
-                  placeholder="Enter your email address"
-                  className={lookupError ? 'error' : ''}
-                />
-                <button type="submit" className="lookup-button">Look Up</button>
-              </div>
-              {lookupError && <span className="error-message">{lookupError}</span>}
-            </form>
-          </div>
-        )}
 
         {/* Show user info if signed in */}
         {isSignedIn && currentUser && (
@@ -488,7 +609,7 @@ function SeatSelection({ rsvps, tablesCount = 5, seatsPerTable = 8, onSeatSelect
             {currentUser.table && currentUser.seat && (
               <div className="current-seat-info">
                 <p className="current-seat-label">
-                  <strong>Your Current Seat:</strong> Seat {currentUser.seat} at Table {currentUser.table}
+                  <strong>Your Current Seat:</strong> Seat {currentUser.seat} at {getTableDisplayName(currentUser.table)}
                 </p>
                 <p className="current-seat-hint">✨ Your seat is highlighted in green on the seating plan below</p>
               </div>
@@ -653,38 +774,61 @@ function SeatSelection({ rsvps, tablesCount = 5, seatsPerTable = 8, onSeatSelect
 
         {isSignedIn && currentUser && currentUser.seat && (
           <div className="confirmation-banner">
-            ✅ {currentUser.name || currentUser.email} - Seat {currentUser.seat} at Table {currentUser.table} confirmed!
+            ✅ {currentUser.name || currentUser.email} - Seat {currentUser.seat} at {getTableDisplayName(currentUser.table)} confirmed!
           </div>
         )}
       </div>
 
-      <div className="legend">
-        <div className="legend-item">
-          <div className="seat-legend empty"></div>
-          <span>Available</span>
-        </div>
-        <div className="legend-item">
-          <div className="seat-legend occupied"></div>
-          <span>Occupied</span>
-        </div>
-        <div className="legend-item">
-          <div className="seat-legend selected"></div>
-          <span>Selected</span>
-        </div>
+      <div className={`tables-grid ${tablePositions ? 'arranged' : ''}`} 
+           style={tablePositions ? {
+             gridTemplateColumns: `repeat(${gridCols}, 1fr)`,
+             gridTemplateRows: `repeat(${gridRows}, minmax(100px, auto))`
+           } : {}}>
+        {/* Render custom areas if arrangement exists */}
+        {tablePositions && customAreas && customAreas.map(area => {
+          const areaWidth = (area.width || 1)
+          const areaHeight = (area.height || 1)
+          return (
+            <div
+              key={area.id}
+              className="custom-area-display"
+              style={{
+                gridColumn: `${area.x + 1} / span ${areaWidth}`,
+                gridRow: `${area.y + 1} / span ${areaHeight}`,
+                zIndex: 0
+              }}
+              title={area.label}
+            >
+              <div className="custom-area-label">{area.label}</div>
+            </div>
+          )
+        })}
+        
+        {/* Render tables */}
+        {Array.from({ length: tablesCount }, (_, i) => {
+          const tableNumber = i + 1
+          const position = tablePositions?.find(p => p.tableNumber === tableNumber)
+          return (
+            <div
+              key={tableNumber}
+              className={position ? 'table-positioned' : ''}
+              style={position ? {
+                gridColumn: position.x + 1,
+                gridRow: position.y + 1,
+                zIndex: 1
+              } : {}}
+            >
+              {renderTable(tableNumber)}
+            </div>
+          )
+        })}
+      </div>
       </div>
 
-      <div className="tables-grid">
-        {Array.from({ length: tablesCount }, (_, i) => renderTable(i + 1))}
-      </div>
-
-      {onBackToMenu && (
-        <div className="seat-selection-actions">
-          <button onClick={onBackToMenu} className="back-to-menu-button">
-            Back to Menu
-          </button>
-        </div>
-      )}
-    </div>
+      {/* Render dialogs using portals to document body */}
+      {lookupDialogContent && createPortal(lookupDialogContent, document.body)}
+      {tableDialogContent && createPortal(tableDialogContent, document.body)}
+    </>
   )
 }
 

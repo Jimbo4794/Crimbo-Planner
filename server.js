@@ -261,15 +261,42 @@ app.get('/api/config', (req, res) => {
 
 app.put('/api/config', async (req, res) => {
   try {
-    const { tablesCount, seatsPerTable } = req.body;
+    const { tablesCount, seatsPerTable, tablePositions, customAreas, gridCols, gridRows, tableDisplayNames } = req.body;
     const config = {
       tablesCount: tablesCount || 5,
       seatsPerTable: seatsPerTable || 8
     };
     
+    // Include tablePositions if provided (can be null to clear)
+    if (tablePositions !== undefined) {
+      config.tablePositions = tablePositions;
+    }
+    
+    // Include customAreas if provided (can be null to clear)
+    if (customAreas !== undefined) {
+      config.customAreas = customAreas;
+    }
+    
+    // Include gridCols if provided
+    if (gridCols !== undefined && gridCols !== null) {
+      config.gridCols = gridCols;
+    }
+    
+    // Include gridRows if provided
+    if (gridRows !== undefined && gridRows !== null) {
+      config.gridRows = gridRows;
+    }
+    
+    // Include tableDisplayNames if provided (can be null to clear)
+    if (tableDisplayNames !== undefined) {
+      config.tableDisplayNames = tableDisplayNames;
+    }
+    
     // Atomic read-modify-write with lock held throughout
-    const savedConfig = await readModifyWriteJSONFile('config.json', () => {
-      return config;
+    const savedConfig = await readModifyWriteJSONFile('config.json', (currentConfig) => {
+      // Merge with existing config to preserve any other fields
+      const existingConfig = currentConfig || {};
+      return { ...existingConfig, ...config };
     });
     
     res.json({ success: true, ...savedConfig });
