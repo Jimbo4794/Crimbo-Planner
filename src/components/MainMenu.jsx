@@ -41,6 +41,28 @@ function MainMenu({ onNavigate }) {
         </button>
 
         <button 
+          onClick={() => onNavigate('eventdetails')} 
+          className="menu-option"
+        >
+          <div className="menu-icon">📅</div>
+          <div className="menu-content">
+            <h3>Event Details</h3>
+            <p>View and edit event information, date, location, and more</p>
+          </div>
+        </button>
+
+        <button 
+          onClick={() => onNavigate('feedback')} 
+          className="menu-option"
+        >
+          <div className="menu-icon">💬</div>
+          <div className="menu-content">
+            <h3>Feedback</h3>
+            <p>Share your thoughts and feedback about the event</p>
+          </div>
+        </button>
+
+        <button 
           onClick={() => onNavigate('admin')} 
           className="menu-option"
         >

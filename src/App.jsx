@@ -4,7 +4,9 @@ import RSVPForm from './components/RSVPForm'
 import SeatSelection from './components/SeatSelection'
 import Admin from './components/Admin'
 import LiftSharing from './components/LiftSharing'
-import { fetchRSVPs, saveRSVPs, fetchMenu, saveMenu, fetchConfig, saveConfig } from './api'
+import EventDetails from './components/EventDetails'
+import Feedback from './components/Feedback'
+import { fetchRSVPs, saveRSVPs, fetchMenu, saveMenu, fetchConfig, saveConfig, fetchEventDetails, saveEventDetails } from './api'
 import { DEFAULT_TABLES_COUNT, DEFAULT_SEATS_PER_TABLE } from './utils/constants'
 import './App.css'
 
@@ -49,7 +51,8 @@ function App() {
   const [gridCols, setGridCols] = useState(12) // Number of columns in arrangement grid
   const [gridRows, setGridRows] = useState(8) // Number of rows in arrangement grid
   const [tableDisplayNames, setTableDisplayNames] = useState(null) // Object mapping tableNumber to display name
-  const [currentStep, setCurrentStep] = useState('menu') // 'menu', 'rsvp', 'seating', 'liftsharing', or 'admin'
+  const [eventDetails, setEventDetails] = useState(null) // Event details object
+  const [currentStep, setCurrentStep] = useState('menu') // 'menu', 'rsvp', 'seating', 'liftsharing', 'eventdetails', 'feedback', or 'admin'
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState(null)
 
@@ -61,10 +64,11 @@ function App() {
         setError(null)
 
         // Load all data in parallel
-        const [rsvpsData, menuData, configData] = await Promise.all([
+        const [rsvpsData, menuData, configData, eventData] = await Promise.all([
           fetchRSVPs().catch(() => []),
           fetchMenu().catch(() => null),
-          fetchConfig().catch(() => ({ tablesCount: DEFAULT_TABLES_COUNT, seatsPerTable: DEFAULT_SEATS_PER_TABLE }))
+          fetchConfig().catch(() => ({ tablesCount: DEFAULT_TABLES_COUNT, seatsPerTable: DEFAULT_SEATS_PER_TABLE })),
+          fetchEventDetails().catch(() => null)
         ])
 
         setRsvps(rsvpsData)
@@ -78,6 +82,7 @@ function App() {
         setGridCols(configData.gridCols || 12)
         setGridRows(configData.gridRows || 8)
         setTableDisplayNames(configData.tableDisplayNames || null)
+        setEventDetails(eventData)
       } catch (err) {
         console.error('Error loading data:', err)
         setError('Failed to load data. Please refresh the page.')
@@ -280,6 +285,10 @@ function App() {
     setMenuCategories(updatedMenuCategories)
   }
 
+  const handleUpdateEventDetails = (updatedEventDetails) => {
+    setEventDetails(updatedEventDetails)
+  }
+
   const handleUpdateTablesCount = (newTablesCount) => {
     // Validate: must be at least 1
     if (newTablesCount < 1) {
@@ -362,6 +371,15 @@ function App() {
             onBackToMenu={handleBackToMenu}
             rsvps={rsvps}
           />
+        ) : currentStep === 'eventdetails' ? (
+          <EventDetails 
+            onBackToMenu={handleBackToMenu}
+            eventDetails={eventDetails}
+          />
+        ) : currentStep === 'feedback' ? (
+          <Feedback 
+            onBackToMenu={handleBackToMenu}
+          />
         ) : currentStep === 'admin' ? (
           <Admin 
             rsvps={rsvps}
@@ -372,6 +390,7 @@ function App() {
             customAreas={customAreas}
             gridCols={gridCols}
             gridRows={gridRows}
+            eventDetails={eventDetails}
             onUpdateRSVPs={handleUpdateRSVPs}
             onUpdateMenuCategories={handleUpdateMenuCategories}
             onUpdateTablesCount={handleUpdateTablesCount}
@@ -380,6 +399,7 @@ function App() {
             onUpdateCustomAreas={setCustomAreas}
             onUpdateGridCols={setGridCols}
             onUpdateGridRows={setGridRows}
+            onUpdateEventDetails={handleUpdateEventDetails}
             onBackToMenu={handleBackToMenu}
           />
         ) : (

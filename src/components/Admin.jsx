@@ -2,11 +2,12 @@ import { useState, useEffect } from 'react'
 import './Admin.css'
 import ImageCropper from './ImageCropper'
 import { AVAILABLE_ICONS, MAX_IMAGE_SIZE } from '../utils/constants'
+import { saveEventDetails, fetchFeedback, deleteFeedback } from '../api'
 
 // Get admin password from environment variable, fallback to default
 const ADMIN_PASSWORD = import.meta.env.VITE_ADMIN_PASSWORD || 'admin123'
 
-function Admin({ rsvps, menuCategories, tablesCount, seatsPerTable, tablePositions, customAreas, gridCols, gridRows, onUpdateRSVPs, onUpdateMenuCategories, onUpdateTablesCount, onUpdateSeatsPerTable, onUpdateTablePositions, onUpdateCustomAreas, onUpdateGridCols, onUpdateGridRows, onBackToMenu }) {
+function Admin({ rsvps, menuCategories, tablesCount, seatsPerTable, tablePositions, customAreas, gridCols, gridRows, eventDetails, onUpdateRSVPs, onUpdateMenuCategories, onUpdateTablesCount, onUpdateSeatsPerTable, onUpdateTablePositions, onUpdateCustomAreas, onUpdateGridCols, onUpdateGridRows, onUpdateEventDetails, onBackToMenu }) {
   // Helper function to get menu option label by ID
   const getMenuOptionLabel = (menuId) => {
     for (const category of menuCategories) {
@@ -18,9 +19,25 @@ function Admin({ rsvps, menuCategories, tablesCount, seatsPerTable, tablePositio
   const [isAuthenticated, setIsAuthenticated] = useState(false)
   const [password, setPassword] = useState('')
   const [passwordError, setPasswordError] = useState('')
-  const [activeTab, setActiveTab] = useState('users') // 'users', 'menu', 'seating', 'arrangement', or 'storage'
+  const [activeTab, setActiveTab] = useState('users') // 'users', 'menu', 'seating', 'arrangement', 'event', 'feedback', or 'storage'
   const [editingRSVP, setEditingRSVP] = useState(null)
   const [editingMenu, setEditingMenu] = useState(false)
+  const [eventDetailsForm, setEventDetailsForm] = useState({
+    eventName: '',
+    date: '',
+    time: '',
+    location: '',
+    address: '',
+    description: '',
+    contactEmail: '',
+    contactPhone: '',
+    dressCode: '',
+    additionalInfo: ''
+  })
+  const [savingEventDetails, setSavingEventDetails] = useState(false)
+  const [eventDetailsMessage, setEventDetailsMessage] = useState(null)
+  const [feedbackList, setFeedbackList] = useState([])
+  const [loadingFeedback, setLoadingFeedback] = useState(false)
 
   const handlePasswordSubmit = (e) => {
     e.preventDefault()
@@ -39,6 +56,75 @@ function Admin({ rsvps, menuCategories, tablesCount, seatsPerTable, tablePositio
     setPasswordError('')
     setEditingRSVP(null)
     setEditingMenu(false)
+  }
+
+  // Load event details when tab is opened or eventDetails prop changes
+  useEffect(() => {
+    if (eventDetails) {
+      setEventDetailsForm(eventDetails)
+    }
+  }, [eventDetails])
+
+  // Load feedback when feedback tab is opened
+  useEffect(() => {
+    if (activeTab === 'feedback' && isAuthenticated) {
+      loadFeedback()
+    }
+  }, [activeTab, isAuthenticated])
+
+  const loadFeedback = async () => {
+    try {
+      setLoadingFeedback(true)
+      const data = await fetchFeedback()
+      setFeedbackList(data || [])
+    } catch (error) {
+      console.error('Error loading feedback:', error)
+    } finally {
+      setLoadingFeedback(false)
+    }
+  }
+
+  const handleDeleteFeedback = async (feedbackId) => {
+    if (!window.confirm('Are you sure you want to delete this feedback?')) {
+      return
+    }
+
+    try {
+      await deleteFeedback(feedbackId)
+      const updatedFeedback = feedbackList.filter(f => f.id !== feedbackId)
+      setFeedbackList(updatedFeedback)
+    } catch (error) {
+      console.error('Error deleting feedback:', error)
+      alert('Failed to delete feedback. Please try again.')
+    }
+  }
+
+  const handleEventDetailsInputChange = (field, value) => {
+    setEventDetailsForm(prev => ({
+      ...prev,
+      [field]: value
+    }))
+    if (eventDetailsMessage) {
+      setEventDetailsMessage(null)
+    }
+  }
+
+  const handleSaveEventDetails = async (e) => {
+    e.preventDefault()
+    try {
+      setSavingEventDetails(true)
+      await saveEventDetails(eventDetailsForm)
+      if (onUpdateEventDetails) {
+        onUpdateEventDetails(eventDetailsForm)
+      }
+      setEventDetailsMessage({ type: 'success', text: 'Event details saved successfully!' })
+      setTimeout(() => setEventDetailsMessage(null), 3000)
+    } catch (error) {
+      console.error('Error saving event details:', error)
+      setEventDetailsMessage({ type: 'error', text: 'Failed to save event details. Please try again.' })
+    } finally {
+      setSavingEventDetails(false)
+    }
   }
 
   const handleDeleteRSVP = (rsvpId) => {
@@ -246,6 +332,18 @@ function Admin({ rsvps, menuCategories, tablesCount, seatsPerTable, tablePositio
           onClick={() => setActiveTab('arrangement')}
         >
           Table Arrangement
+        </button>
+        <button
+          className={`tab-button ${activeTab === 'event' ? 'active' : ''}`}
+          onClick={() => setActiveTab('event')}
+        >
+          Event Details
+        </button>
+        <button
+          className={`tab-button ${activeTab === 'feedback' ? 'active' : ''}`}
+          onClick={() => setActiveTab('feedback')}
+        >
+          Feedback ({feedbackList.length})
         </button>
         <button
           className={`tab-button ${activeTab === 'storage' ? 'active' : ''}`}
@@ -536,6 +634,198 @@ function Admin({ rsvps, menuCategories, tablesCount, seatsPerTable, tablePositio
           />
         )}
 
+        {activeTab === 'event' && (
+          <div className="event-details-admin-section">
+            <h3>Event Details Management</h3>
+            {eventDetailsMessage && (
+              <div className={`admin-message ${eventDetailsMessage.type}`}>
+                {eventDetailsMessage.text}
+              </div>
+            )}
+            <form onSubmit={handleSaveEventDetails} className="event-details-admin-form">
+              <div className="form-section">
+                <h4>Basic Information</h4>
+                <div className="form-row">
+                  <div className="form-group">
+                    <label htmlFor="admin-event-name">Event Name *</label>
+                    <input
+                      type="text"
+                      id="admin-event-name"
+                      value={eventDetailsForm.eventName}
+                      onChange={(e) => handleEventDetailsInputChange('eventName', e.target.value)}
+                      placeholder="e.g., Christmas Party 2024"
+                    />
+                  </div>
+                  <div className="form-group">
+                    <label htmlFor="admin-date">Date</label>
+                    <input
+                      type="date"
+                      id="admin-date"
+                      value={eventDetailsForm.date}
+                      onChange={(e) => handleEventDetailsInputChange('date', e.target.value)}
+                    />
+                  </div>
+                  <div className="form-group">
+                    <label htmlFor="admin-time">Time</label>
+                    <input
+                      type="time"
+                      id="admin-time"
+                      value={eventDetailsForm.time}
+                      onChange={(e) => handleEventDetailsInputChange('time', e.target.value)}
+                    />
+                  </div>
+                </div>
+              </div>
+
+              <div className="form-section">
+                <h4>Location</h4>
+                <div className="form-group">
+                  <label htmlFor="admin-location">Venue Name</label>
+                  <input
+                    type="text"
+                    id="admin-location"
+                    value={eventDetailsForm.location}
+                    onChange={(e) => handleEventDetailsInputChange('location', e.target.value)}
+                    placeholder="e.g., Grand Hotel, Community Centre"
+                  />
+                </div>
+                <div className="form-group">
+                  <label htmlFor="admin-address">Address</label>
+                  <textarea
+                    id="admin-address"
+                    value={eventDetailsForm.address}
+                    onChange={(e) => handleEventDetailsInputChange('address', e.target.value)}
+                    placeholder="Full address including postcode"
+                    rows={3}
+                  />
+                </div>
+              </div>
+
+              <div className="form-section">
+                <h4>Event Description</h4>
+                <div className="form-group">
+                  <label htmlFor="admin-description">Description</label>
+                  <textarea
+                    id="admin-description"
+                    value={eventDetailsForm.description}
+                    onChange={(e) => handleEventDetailsInputChange('description', e.target.value)}
+                    placeholder="Tell guests about the event..."
+                    rows={5}
+                  />
+                </div>
+              </div>
+
+              <div className="form-section">
+                <h4>Contact Information</h4>
+                <div className="form-row">
+                  <div className="form-group">
+                    <label htmlFor="admin-contact-email">Contact Email</label>
+                    <input
+                      type="email"
+                      id="admin-contact-email"
+                      value={eventDetailsForm.contactEmail}
+                      onChange={(e) => handleEventDetailsInputChange('contactEmail', e.target.value)}
+                      placeholder="contact@example.com"
+                    />
+                  </div>
+                  <div className="form-group">
+                    <label htmlFor="admin-contact-phone">Contact Phone</label>
+                    <input
+                      type="tel"
+                      id="admin-contact-phone"
+                      value={eventDetailsForm.contactPhone}
+                      onChange={(e) => handleEventDetailsInputChange('contactPhone', e.target.value)}
+                      placeholder="+44 1234 567890"
+                    />
+                  </div>
+                </div>
+              </div>
+
+              <div className="form-section">
+                <h4>Additional Information</h4>
+                <div className="form-group">
+                  <label htmlFor="admin-dress-code">Dress Code</label>
+                  <input
+                    type="text"
+                    id="admin-dress-code"
+                    value={eventDetailsForm.dressCode}
+                    onChange={(e) => handleEventDetailsInputChange('dressCode', e.target.value)}
+                    placeholder="e.g., Smart Casual, Black Tie, Festive"
+                  />
+                </div>
+                <div className="form-group">
+                  <label htmlFor="admin-additional-info">Additional Information</label>
+                  <textarea
+                    id="admin-additional-info"
+                    value={eventDetailsForm.additionalInfo}
+                    onChange={(e) => handleEventDetailsInputChange('additionalInfo', e.target.value)}
+                    placeholder="Any other important information for guests..."
+                    rows={4}
+                  />
+                </div>
+              </div>
+
+              <div className="form-actions">
+                <button type="submit" className="save-button" disabled={savingEventDetails}>
+                  {savingEventDetails ? 'Saving...' : 'Save Event Details'}
+                </button>
+              </div>
+            </form>
+          </div>
+        )}
+        {activeTab === 'feedback' && (
+          <div className="feedback-admin-section">
+            <div className="feedback-section-header">
+              <h3>Feedback Management</h3>
+              <button onClick={loadFeedback} className="refresh-button" disabled={loadingFeedback}>
+                {loadingFeedback ? 'Loading...' : '🔄 Refresh'}
+              </button>
+            </div>
+            {loadingFeedback ? (
+              <p className="loading-text">Loading feedback...</p>
+            ) : feedbackList.length === 0 ? (
+              <p className="no-data">No feedback submitted yet</p>
+            ) : (
+              <div className="feedback-list">
+                {feedbackList.map((feedback) => (
+                  <div key={feedback.id} className="feedback-item">
+                    <div className="feedback-item-header">
+                      <div className="feedback-meta">
+                        <span className="feedback-name">{feedback.name || 'Anonymous'}</span>
+                        {feedback.rating && (
+                          <span className="feedback-rating">
+                            {'⭐'.repeat(feedback.rating)}
+                          </span>
+                        )}
+                      </div>
+                      <div className="feedback-actions">
+                        <span className="feedback-date">
+                          {new Date(feedback.submittedAt).toLocaleString('en-GB', {
+                            day: 'numeric',
+                            month: 'short',
+                            year: 'numeric',
+                            hour: '2-digit',
+                            minute: '2-digit'
+                          })}
+                        </span>
+                        <button
+                          onClick={() => handleDeleteFeedback(feedback.id)}
+                          className="delete-feedback-button"
+                          title="Delete feedback"
+                        >
+                          🗑️
+                        </button>
+                      </div>
+                    </div>
+                    <div className="feedback-text">
+                      {feedback.feedbackText}
+                    </div>
+                  </div>
+                ))}
+              </div>
+            )}
+          </div>
+        )}
         {activeTab === 'storage' && (
           <StorageManagement
             rsvps={rsvps}

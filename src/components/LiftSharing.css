@@ -256,6 +256,12 @@
   font-size: 1rem;
 }
 
+.where-from {
+  font-size: 0.8125rem;
+  color: var(--text-light);
+  margin-top: 0.25rem;
+}
+
 .lift-seats-info {
   display: flex;
   align-items: center;

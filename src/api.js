@@ -80,3 +80,48 @@ export const saveLiftShares = async (liftShares) => {
   return handleResponse(response);
 };
 
+// Event Details API
+export const fetchEventDetails = async () => {
+  const response = await fetch(`${API_BASE}/event`);
+  const data = await handleResponse(response);
+  return data; // Returns null if no event details exist
+};
+
+export const saveEventDetails = async (eventDetails) => {
+  const response = await fetch(`${API_BASE}/event`, {
+    method: 'PUT',
+    headers: {
+      'Content-Type': 'application/json',
+    },
+    body: JSON.stringify({ eventDetails }),
+  });
+  return handleResponse(response);
+};
+
+// Feedback API
+export const fetchFeedback = async () => {
+  const response = await fetch(`${API_BASE}/feedback`);
+  return handleResponse(response);
+};
+
+export const saveFeedback = async (feedback) => {
+  const response = await fetch(`${API_BASE}/feedback`, {
+    method: 'POST',
+    headers: {
+      'Content-Type': 'application/json',
+    },
+    body: JSON.stringify({ feedback }),
+  });
+  return handleResponse(response);
+};
+
+export const deleteFeedback = async (feedbackId) => {
+  const response = await fetch(`${API_BASE}/feedback/${feedbackId}`, {
+    method: 'DELETE',
+    headers: {
+      'Content-Type': 'application/json',
+    },
+  });
+  return handleResponse(response);
+};
+

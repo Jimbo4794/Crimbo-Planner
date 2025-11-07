@@ -11,6 +11,7 @@ function LiftSharing({ onBackToMenu, rsvps = [] }) {
   
   // Driver form state
   const [driverName, setDriverName] = useState('')
+  const [whereFrom, setWhereFrom] = useState('')
   const [availableSeats, setAvailableSeats] = useState(1)
   const [driverErrors, setDriverErrors] = useState({})
   
@@ -54,6 +55,7 @@ function LiftSharing({ onBackToMenu, rsvps = [] }) {
     const newLiftShare = {
       id: Date.now().toString(),
       driverName: driverName.trim(),
+      whereFrom: whereFrom.trim(),
       availableSeats: parseInt(availableSeats),
       passengers: [],
       createdAt: new Date().toISOString()
@@ -65,6 +67,7 @@ function LiftSharing({ onBackToMenu, rsvps = [] }) {
       setLiftShares(updated)
       setShowDriverForm(false)
       setDriverName('')
+      setWhereFrom('')
       setAvailableSeats(1)
       setDriverErrors({})
     } catch (error) {
@@ -230,6 +233,18 @@ function LiftSharing({ onBackToMenu, rsvps = [] }) {
             </div>
 
             <div className="form-group">
+              <label htmlFor="where-from">Where From</label>
+              <input
+                type="text"
+                id="where-from"
+                value={whereFrom}
+                onChange={(e) => setWhereFrom(e.target.value)}
+                placeholder="e.g., City Centre, Station, etc."
+              />
+              <p className="field-hint">Where will you be picking up passengers from?</p>
+            </div>
+
+            <div className="form-group">
               <label htmlFor="available-seats">Available Seats *</label>
               <select
                 id="available-seats"
@@ -319,6 +334,9 @@ function LiftSharing({ onBackToMenu, rsvps = [] }) {
                       <span className="driver-icon">🚗</span>
                       <div>
                         <div className="driver-name">{liftShare.driverName}</div>
+                        {liftShare.whereFrom && (
+                          <div className="where-from">📍 {liftShare.whereFrom}</div>
+                        )}
                       </div>
                     </div>
                     <div className="lift-seats-info">

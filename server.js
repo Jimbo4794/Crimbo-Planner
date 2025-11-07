@@ -282,6 +282,96 @@ app.put('/api/liftshares', async (req, res) => {
   }
 });
 
+// Event Details endpoints
+app.get('/api/event', (req, res) => {
+  try {
+    const eventDetails = readJSONFile('event.json');
+    res.json(eventDetails || null);
+  } catch (error) {
+    console.error('Error reading event details:', error);
+    res.status(500).json({ error: 'Failed to read event details' });
+  }
+});
+
+app.put('/api/event', async (req, res) => {
+  try {
+    const { eventDetails } = req.body;
+    if (!eventDetails || typeof eventDetails !== 'object') {
+      return res.status(400).json({ error: 'Event details must be an object' });
+    }
+    
+    // Atomic read-modify-write with lock held throughout
+    const savedEventDetails = await readModifyWriteJSONFile('event.json', () => {
+      return eventDetails;
+    });
+    
+    res.json({ success: true, eventDetails: savedEventDetails });
+  } catch (error) {
+    console.error('Error saving event details:', error);
+    if (error.message.includes('lock')) {
+      res.status(503).json({ error: 'Server is busy processing another request. Please try again in a moment.' });
+    } else {
+      res.status(500).json({ error: 'Failed to save event details' });
+    }
+  }
+});
+
+// Feedback endpoints
+app.get('/api/feedback', (req, res) => {
+  try {
+    const feedback = readJSONFile('feedback.json');
+    res.json(feedback || []);
+  } catch (error) {
+    console.error('Error reading feedback:', error);
+    res.status(500).json({ error: 'Failed to read feedback' });
+  }
+});
+
+app.post('/api/feedback', async (req, res) => {
+  try {
+    const { feedback: newFeedback } = req.body;
+    if (!newFeedback || typeof newFeedback !== 'object') {
+      return res.status(400).json({ error: 'Feedback must be an object' });
+    }
+    
+    // Atomic read-modify-write with lock held throughout
+    const savedFeedback = await readModifyWriteJSONFile('feedback.json', (currentFeedback) => {
+      const feedbackList = currentFeedback || [];
+      return [...feedbackList, newFeedback];
+    });
+    
+    res.json({ success: true, feedback: newFeedback });
+  } catch (error) {
+    console.error('Error saving feedback:', error);
+    if (error.message.includes('lock')) {
+      res.status(503).json({ error: 'Server is busy processing another request. Please try again in a moment.' });
+    } else {
+      res.status(500).json({ error: 'Failed to save feedback' });
+    }
+  }
+});
+
+app.delete('/api/feedback/:id', async (req, res) => {
+  try {
+    const { id } = req.params;
+    
+    // Atomic read-modify-write with lock held throughout
+    const updatedFeedback = await readModifyWriteJSONFile('feedback.json', (currentFeedback) => {
+      const feedbackList = currentFeedback || [];
+      return feedbackList.filter(f => f.id !== id);
+    });
+    
+    res.json({ success: true, feedback: updatedFeedback });
+  } catch (error) {
+    console.error('Error deleting feedback:', error);
+    if (error.message.includes('lock')) {
+      res.status(503).json({ error: 'Server is busy processing another request. Please try again in a moment.' });
+    } else {
+      res.status(500).json({ error: 'Failed to delete feedback' });
+    }
+  }
+});
+
 // Config endpoints
 app.get('/api/config', (req, res) => {
   try {
