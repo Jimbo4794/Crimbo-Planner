@@ -3,6 +3,7 @@ import MainMenu from './components/MainMenu'
 import RSVPForm from './components/RSVPForm'
 import SeatSelection from './components/SeatSelection'
 import Admin from './components/Admin'
+import LiftSharing from './components/LiftSharing'
 import { fetchRSVPs, saveRSVPs, fetchMenu, saveMenu, fetchConfig, saveConfig } from './api'
 import { DEFAULT_TABLES_COUNT, DEFAULT_SEATS_PER_TABLE } from './utils/constants'
 import './App.css'
@@ -48,7 +49,7 @@ function App() {
   const [gridCols, setGridCols] = useState(12) // Number of columns in arrangement grid
   const [gridRows, setGridRows] = useState(8) // Number of rows in arrangement grid
   const [tableDisplayNames, setTableDisplayNames] = useState(null) // Object mapping tableNumber to display name
-  const [currentStep, setCurrentStep] = useState('menu') // 'menu', 'rsvp', 'seating', or 'admin'
+  const [currentStep, setCurrentStep] = useState('menu') // 'menu', 'rsvp', 'seating', 'liftsharing', or 'admin'
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState(null)
 
@@ -355,6 +356,11 @@ function App() {
             onBackToMenu={handleBackToMenu}
             menuCategories={menuCategories}
             existingRSVPs={rsvps}
+          />
+        ) : currentStep === 'liftsharing' ? (
+          <LiftSharing 
+            onBackToMenu={handleBackToMenu}
+            rsvps={rsvps}
           />
         ) : currentStep === 'admin' ? (
           <Admin 

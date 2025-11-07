@@ -248,6 +248,40 @@ app.put('/api/menu', async (req, res) => {
   }
 });
 
+// Lift Sharing endpoints
+app.get('/api/liftshares', (req, res) => {
+  try {
+    const liftShares = readJSONFile('liftshares.json');
+    res.json(liftShares || []);
+  } catch (error) {
+    console.error('Error reading lift shares:', error);
+    res.status(500).json({ error: 'Failed to read lift shares' });
+  }
+});
+
+app.put('/api/liftshares', async (req, res) => {
+  try {
+    const { liftShares } = req.body;
+    if (!Array.isArray(liftShares)) {
+      return res.status(400).json({ error: 'Lift shares must be an array' });
+    }
+    
+    // Atomic read-modify-write with lock held throughout
+    const savedLiftShares = await readModifyWriteJSONFile('liftshares.json', () => {
+      return liftShares;
+    });
+    
+    res.json({ success: true, liftShares: savedLiftShares });
+  } catch (error) {
+    console.error('Error saving lift shares:', error);
+    if (error.message.includes('lock')) {
+      res.status(503).json({ error: 'Server is busy processing another request. Please try again in a moment.' });
+    } else {
+      res.status(500).json({ error: 'Failed to save lift shares' });
+    }
+  }
+});
+
 // Config endpoints
 app.get('/api/config', (req, res) => {
   try {

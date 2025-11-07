@@ -30,6 +30,17 @@ function MainMenu({ onNavigate }) {
         </button>
 
         <button 
+          onClick={() => onNavigate('liftsharing')} 
+          className="menu-option"
+        >
+          <div className="menu-icon">🚗</div>
+          <div className="menu-content">
+            <h3>Lift Sharing</h3>
+            <p>Organise lift sharing - offer a lift or sign up for one</p>
+          </div>
+        </button>
+
+        <button 
           onClick={() => onNavigate('admin')} 
           className="menu-option"
         >

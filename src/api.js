@@ -63,3 +63,20 @@ export const saveConfig = async (tablesCount, seatsPerTable, tablePositions = nu
   return handleResponse(response);
 };
 
+// Lift Sharing API
+export const fetchLiftShares = async () => {
+  const response = await fetch(`${API_BASE}/liftshares`);
+  return handleResponse(response);
+};
+
+export const saveLiftShares = async (liftShares) => {
+  const response = await fetch(`${API_BASE}/liftshares`, {
+    method: 'PUT',
+    headers: {
+      'Content-Type': 'application/json',
+    },
+    body: JSON.stringify({ liftShares }),
+  });
+  return handleResponse(response);
+};
+
