@@ -1,4 +1,118 @@
 {
   "tablesCount": 15,
-  "seatsPerTable": 8
+  "seatsPerTable": 8,
+  "tablePositions": [
+    {
+      "tableNumber": 1,
+      "x": 1,
+      "y": 0
+    },
+    {
+      "tableNumber": 2,
+      "x": 2,
+      "y": 0
+    },
+    {
+      "tableNumber": 3,
+      "x": 1,
+      "y": 1
+    },
+    {
+      "tableNumber": 4,
+      "x": 2,
+      "y": 1
+    },
+    {
+      "tableNumber": 5,
+      "x": 1,
+      "y": 2
+    },
+    {
+      "tableNumber": 6,
+      "x": 2,
+      "y": 2
+    },
+    {
+      "tableNumber": 7,
+      "x": 1,
+      "y": 3
+    },
+    {
+      "tableNumber": 8,
+      "x": 2,
+      "y": 3
+    },
+    {
+      "tableNumber": 9,
+      "x": 1,
+      "y": 4
+    },
+    {
+      "tableNumber": 10,
+      "x": 2,
+      "y": 4
+    },
+    {
+      "tableNumber": 11,
+      "x": 1,
+      "y": 5
+    },
+    {
+      "tableNumber": 12,
+      "x": 2,
+      "y": 5
+    },
+    {
+      "tableNumber": 13,
+      "x": 1,
+      "y": 6
+    },
+    {
+      "tableNumber": 14,
+      "x": 2,
+      "y": 6
+    },
+    {
+      "tableNumber": 15,
+      "x": 1,
+      "y": 7
+    }
+  ],
+  "customAreas": [
+    {
+      "id": "1762506561062",
+      "label": "Stage",
+      "x": 1,
+      "y": 8,
+      "width": 1,
+      "height": 1
+    },
+    {
+      "id": "1762506568872",
+      "label": "Entrance",
+      "x": 2,
+      "y": 8,
+      "width": 1,
+      "height": 1
+    },
+    {
+      "id": "1762506573752",
+      "label": "Bar",
+      "x": 3,
+      "y": 0,
+      "width": 1,
+      "height": 7
+    },
+    {
+      "id": "1762506579628",
+      "label": "Windows",
+      "x": 0,
+      "y": 0,
+      "width": 1,
+      "height": 8
+    }
+  ],
+  "gridCols": 4,
+  "gridRows": 9,
+  "tableDisplayNames": null
 }

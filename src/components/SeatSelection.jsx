@@ -492,6 +492,14 @@ function SeatSelection({ rsvps, tablesCount = 5, seatsPerTable = 8, tablePositio
     // Count occupied seats for this table
     const occupiedCount = Object.keys(occupiedSeats).filter(key => key.startsWith(`${tableNumber}-`)).length
     
+    // Get all RSVPs for this table
+    const tableRsvps = rsvps.filter(rsvp => rsvp.table === tableNumber && rsvp.seat)
+    
+    // Limit preview to first 6 icons, show "+X more" if there are more
+    const maxPreviewIcons = 6
+    const previewRsvps = tableRsvps.slice(0, maxPreviewIcons)
+    const remainingCount = Math.max(0, tableRsvps.length - maxPreviewIcons)
+    
     // Always show compact card view (table opens in dialog)
     return (
       <div 
@@ -505,6 +513,24 @@ function SeatSelection({ rsvps, tablesCount = 5, seatsPerTable = 8, tablePositio
             {getTableDisplayName(tableNumber)}
           </h3>
         </div>
+        {tableRsvps.length > 0 && (
+          <div className="table-card-preview">
+            {previewRsvps.map((rsvp, index) => (
+              <div key={`${rsvp.email}-${index}`} className="table-card-seat-preview" title={rsvp.name || rsvp.email}>
+                {rsvp.iconType === 'image' && rsvp.icon ? (
+                  <img src={rsvp.icon} alt={rsvp.name || 'Seat'} className="table-card-seat-icon" />
+                ) : (
+                  <div className="table-card-seat-emoji">{rsvp.icon || '👤'}</div>
+                )}
+              </div>
+            ))}
+            {remainingCount > 0 && (
+              <div className="table-card-seat-preview more-seats" title={`${remainingCount} more guest${remainingCount > 1 ? 's' : ''}`}>
+                +{remainingCount}
+              </div>
+            )}
+          </div>
+        )}
         <div className="table-card-info">
           <span className="seat-count">
             {occupiedCount} / {seatsPerTable} seats
