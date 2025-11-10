@@ -125,3 +125,37 @@ export const deleteFeedback = async (feedbackId) => {
   return handleResponse(response);
 };
 
+// Admin API
+export const adminLogin = async (password) => {
+  const response = await fetch(`${API_BASE}/admin/login`, {
+    method: 'POST',
+    headers: {
+      'Content-Type': 'application/json',
+    },
+    body: JSON.stringify({ password }),
+  });
+  return handleResponse(response);
+};
+
+export const adminLogout = async (sessionId) => {
+  const response = await fetch(`${API_BASE}/admin/logout`, {
+    method: 'POST',
+    headers: {
+      'Content-Type': 'application/json',
+      'x-admin-session': sessionId,
+    },
+  });
+  return handleResponse(response);
+};
+
+export const checkAdminSession = async (sessionId) => {
+  const response = await fetch(`${API_BASE}/admin/check`, {
+    method: 'GET',
+    headers: {
+      'Content-Type': 'application/json',
+      'x-admin-session': sessionId,
+    },
+  });
+  return handleResponse(response);
+};
+

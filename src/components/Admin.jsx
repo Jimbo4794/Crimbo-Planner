@@ -2,10 +2,7 @@ import { useState, useEffect } from 'react'
 import './Admin.css'
 import ImageCropper from './ImageCropper'
 import { AVAILABLE_ICONS, MAX_IMAGE_SIZE } from '../utils/constants'
-import { saveEventDetails, fetchFeedback, deleteFeedback } from '../api'
-
-// Get admin password from environment variable, fallback to default
-const ADMIN_PASSWORD = import.meta.env.VITE_ADMIN_PASSWORD || 'admin123'
+import { saveEventDetails, fetchFeedback, deleteFeedback, adminLogin, adminLogout, checkAdminSession } from '../api'
 
 function Admin({ rsvps, menuCategories, tablesCount, seatsPerTable, tablePositions, customAreas, gridCols, gridRows, eventDetails, onUpdateRSVPs, onUpdateMenuCategories, onUpdateTablesCount, onUpdateSeatsPerTable, onUpdateTablePositions, onUpdateCustomAreas, onUpdateGridCols, onUpdateGridRows, onUpdateEventDetails, onBackToMenu }) {
   // Helper function to get menu option label by ID
@@ -38,19 +35,60 @@ function Admin({ rsvps, menuCategories, tablesCount, seatsPerTable, tablePositio
   const [eventDetailsMessage, setEventDetailsMessage] = useState(null)
   const [feedbackList, setFeedbackList] = useState([])
   const [loadingFeedback, setLoadingFeedback] = useState(false)
+  const [adminSessionId, setAdminSessionId] = useState(() => {
+    // Try to restore session from localStorage
+    return localStorage.getItem('adminSessionId') || null
+  })
+  const [checkingSession, setCheckingSession] = useState(false)
 
-  const handlePasswordSubmit = (e) => {
+  // Check if we have a valid session on mount
+  useEffect(() => {
+    if (adminSessionId) {
+      setCheckingSession(true)
+      checkAdminSession(adminSessionId)
+        .then(() => {
+          setIsAuthenticated(true)
+        })
+        .catch(() => {
+          // Session invalid, clear it
+          setAdminSessionId(null)
+          localStorage.removeItem('adminSessionId')
+        })
+        .finally(() => {
+          setCheckingSession(false)
+        })
+    }
+  }, [adminSessionId])
+
+  const handlePasswordSubmit = async (e) => {
     e.preventDefault()
-    if (password === ADMIN_PASSWORD) {
-      setIsAuthenticated(true)
-      setPasswordError('')
-    } else {
-      setPasswordError('Incorrect password')
+    setPasswordError('')
+    
+    try {
+      const result = await adminLogin(password)
+      if (result.success && result.sessionId) {
+        setAdminSessionId(result.sessionId)
+        localStorage.setItem('adminSessionId', result.sessionId)
+        setIsAuthenticated(true)
+        setPassword('')
+        setPasswordError('')
+      }
+    } catch (error) {
+      setPasswordError(error.message || 'Incorrect password')
       setPassword('')
     }
   }
 
-  const handleSignOut = () => {
+  const handleSignOut = async () => {
+    if (adminSessionId) {
+      try {
+        await adminLogout(adminSessionId)
+      } catch (error) {
+        console.error('Error logging out:', error)
+      }
+    }
+    setAdminSessionId(null)
+    localStorage.removeItem('adminSessionId')
     setIsAuthenticated(false)
     setPassword('')
     setPasswordError('')
@@ -273,6 +311,17 @@ function Admin({ rsvps, menuCategories, tablesCount, seatsPerTable, tablePositio
     document.body.removeChild(link)
   }
 
+  if (checkingSession) {
+    return (
+      <div className="admin-container">
+        <div className="admin-login">
+          <h2>Admin Login</h2>
+          <p>Checking session...</p>
+        </div>
+      </div>
+    )
+  }
+
   if (!isAuthenticated) {
     return (
       <div className="admin-container">
@@ -291,10 +340,13 @@ function Admin({ rsvps, menuCategories, tablesCount, seatsPerTable, tablePositio
                 }}
                 placeholder="Enter admin password"
                 className={passwordError ? 'error' : ''}
+                disabled={checkingSession}
               />
               {passwordError && <span className="error-message">{passwordError}</span>}
             </div>
-            <button type="submit" className="login-button">Login</button>
+            <button type="submit" className="login-button" disabled={checkingSession}>
+              {checkingSession ? 'Logging in...' : 'Login'}
+            </button>
           </form>
         </div>
       </div>

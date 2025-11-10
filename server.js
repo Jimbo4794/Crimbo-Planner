@@ -11,6 +11,11 @@ const __dirname = dirname(__filename);
 
 const PORT = process.env.PORT || (process.env.NODE_ENV === 'production' ? 80 : 3000);
 const DATA_DIR = process.env.DATA_DIR || join(__dirname, 'data');
+const ADMIN_PASSWORD = process.env.ADMIN_PASSWORD || 'admin123';
+
+// Simple in-memory session store for admin authentication
+// In production, consider using proper session storage (Redis, database, etc.)
+const adminSessions = new Set();
 
 // Ensure data directory exists
 if (!existsSync(DATA_DIR)) {
@@ -514,6 +519,62 @@ app.put('/api/config', async (req, res) => {
       res.status(500).json({ error: 'Failed to save config' });
     }
   }
+});
+
+// Admin authentication middleware
+const requireAdmin = (req, res, next) => {
+  const sessionId = req.headers['x-admin-session'];
+  if (!sessionId || !adminSessions.has(sessionId)) {
+    return res.status(401).json({ error: 'Unauthorized' });
+  }
+  next();
+};
+
+// Admin login endpoint
+app.post('/api/admin/login', (req, res) => {
+  try {
+    const { password } = req.body;
+    if (!password) {
+      return res.status(400).json({ error: 'Password is required' });
+    }
+    
+    if (password === ADMIN_PASSWORD) {
+      // Generate a simple session ID (in production, use proper session tokens)
+      const sessionId = `admin_${Date.now()}_${Math.random().toString(36).substring(7)}`;
+      adminSessions.add(sessionId);
+      
+      // Session expires after 24 hours (in production, implement proper expiration)
+      setTimeout(() => {
+        adminSessions.delete(sessionId);
+      }, 24 * 60 * 60 * 1000);
+      
+      res.json({ success: true, sessionId });
+    } else {
+      res.status(401).json({ error: 'Incorrect password' });
+    }
+  } catch (error) {
+    console.error('Error in admin login:', error);
+    res.status(500).json({ error: 'Failed to process login' });
+  }
+});
+
+// Admin logout endpoint
+app.post('/api/admin/logout', (req, res) => {
+  try {
+    const sessionId = req.headers['x-admin-session'];
+    if (sessionId) {
+      adminSessions.delete(sessionId);
+    }
+    res.json({ success: true });
+  } catch (error) {
+    console.error('Error in admin logout:', error);
+    res.status(500).json({ error: 'Failed to logout' });
+  }
+});
+
+// Admin session check endpoint
+app.get('/api/admin/check', requireAdmin, (req, res) => {
+  res.json({ success: true, authenticated: true });
 });
 
 // Catch all handler for SPA routing (only in production)
