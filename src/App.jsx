@@ -1,4 +1,4 @@
-import { useState, useEffect } from 'react'
+import { useState, useEffect, useRef } from 'react'
 import MainMenu from './components/MainMenu'
 import RSVPForm from './components/RSVPForm'
 import SeatSelection from './components/SeatSelection'
@@ -8,6 +8,7 @@ import EventDetails from './components/EventDetails'
 import Feedback from './components/Feedback'
 import { fetchRSVPs, saveRSVPs, fetchMenu, saveMenu, fetchConfig, saveConfig, fetchEventDetails, saveEventDetails } from './api'
 import { DEFAULT_TABLES_COUNT, DEFAULT_SEATS_PER_TABLE } from './utils/constants'
+import { getSocket, disconnectSocket } from './utils/websocket'
 import './App.css'
 
 const DEFAULT_MENU_CATEGORIES = [
@@ -40,6 +41,24 @@ const DEFAULT_MENU_CATEGORIES = [
   }
 ]
 
+// Helper function to normalize menu data from old object format to array format
+const normalizeMenuData = (menuData) => {
+  if (!menuData) return null
+  if (Array.isArray(menuData)) return menuData
+  
+  // Handle old object format with numeric keys
+  if (typeof menuData === 'object' && !Array.isArray(menuData)) {
+    const keys = Object.keys(menuData).filter(key => key !== '_version' && !isNaN(parseInt(key)))
+    if (keys.length > 0) {
+      // Convert object with numeric keys to array
+      const sortedKeys = keys.sort((a, b) => parseInt(a) - parseInt(b))
+      return sortedKeys.map(key => menuData[key])
+    }
+  }
+  
+  return menuData
+}
+
 
 function App() {
   const [rsvps, setRsvps] = useState([])
@@ -55,6 +74,11 @@ function App() {
   const [currentStep, setCurrentStep] = useState('menu') // 'menu', 'rsvp', 'seating', 'liftsharing', 'eventdetails', 'feedback', or 'admin'
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState(null)
+  const [rsvpsVersion, setRsvpsVersion] = useState(0) // Version counter to force re-renders
+  const [pendingRSVPId, setPendingRSVPId] = useState(null) // Track RSVP ID that was just created locally
+  
+  // Refs to track if updates are from WebSocket (to prevent infinite save loops)
+  const isUpdatingFromWebSocket = useRef(false)
 
   // Load initial data from API
   useEffect(() => {
@@ -73,7 +97,10 @@ function App() {
 
         setRsvps(rsvpsData)
         if (menuData) {
-          setMenuCategories(menuData)
+          const normalizedMenu = normalizeMenuData(menuData)
+          if (normalizedMenu && Array.isArray(normalizedMenu)) {
+            setMenuCategories(normalizedMenu)
+          }
         }
         setTablesCount(configData.tablesCount || DEFAULT_TABLES_COUNT)
         setSeatsPerTable(configData.seatsPerTable || DEFAULT_SEATS_PER_TABLE)
@@ -94,9 +121,101 @@ function App() {
     loadData()
   }, [])
 
-  // Save to API whenever RSVPs change
+  // Set up WebSocket connection and listeners for real-time updates
   useEffect(() => {
-    if (!loading) {
+    const socket = getSocket()
+    
+    // Test connection
+    socket.on('test', (data) => {
+      console.log('✅ Test event received from server:', data)
+    })
+
+    // Listen for RSVP updates
+    socket.on('rsvps:updated', (updatedRsvps) => {
+      console.log('📥 Received rsvps:updated event', updatedRsvps?.length, 'RSVPs')
+      if (Array.isArray(updatedRsvps)) {
+        isUpdatingFromWebSocket.current = true
+        // Create a new array reference to ensure React detects the change
+        const newRsvps = [...updatedRsvps]
+        console.log('🔄 Updating RSVPs state from WebSocket, new count:', newRsvps.length)
+        setRsvps(newRsvps)
+        // Increment version to force re-render
+        setRsvpsVersion(prev => prev + 1)
+        // Reset flag after state update
+        setTimeout(() => {
+          isUpdatingFromWebSocket.current = false
+        }, 100)
+      }
+    })
+
+    // Listen for menu updates
+    socket.on('menu:updated', (updatedMenu) => {
+      if (Array.isArray(updatedMenu)) {
+        isUpdatingFromWebSocket.current = true
+        const normalizedMenu = normalizeMenuData(updatedMenu)
+        if (normalizedMenu && Array.isArray(normalizedMenu)) {
+          setMenuCategories(normalizedMenu)
+        }
+        setTimeout(() => {
+          isUpdatingFromWebSocket.current = false
+        }, 100)
+      }
+    })
+
+    // Listen for config updates
+    socket.on('config:updated', (updatedConfig) => {
+      if (updatedConfig && typeof updatedConfig === 'object') {
+        isUpdatingFromWebSocket.current = true
+        if (updatedConfig.tablesCount !== undefined) {
+          setTablesCount(updatedConfig.tablesCount)
+        }
+        if (updatedConfig.seatsPerTable !== undefined) {
+          setSeatsPerTable(updatedConfig.seatsPerTable)
+        }
+        if (updatedConfig.tablePositions !== undefined) {
+          setTablePositions(updatedConfig.tablePositions)
+        }
+        if (updatedConfig.customAreas !== undefined) {
+          setCustomAreas(updatedConfig.customAreas)
+        }
+        if (updatedConfig.gridCols !== undefined) {
+          setGridCols(updatedConfig.gridCols)
+        }
+        if (updatedConfig.gridRows !== undefined) {
+          setGridRows(updatedConfig.gridRows)
+        }
+        if (updatedConfig.tableDisplayNames !== undefined) {
+          setTableDisplayNames(updatedConfig.tableDisplayNames)
+        }
+        setTimeout(() => {
+          isUpdatingFromWebSocket.current = false
+        }, 100)
+      }
+    })
+
+    // Listen for event details updates
+    socket.on('event:updated', (updatedEventDetails) => {
+      if (updatedEventDetails) {
+        isUpdatingFromWebSocket.current = true
+        setEventDetails(updatedEventDetails)
+        setTimeout(() => {
+          isUpdatingFromWebSocket.current = false
+        }, 100)
+      }
+    })
+
+    // Cleanup on unmount
+    return () => {
+      socket.off('rsvps:updated')
+      socket.off('menu:updated')
+      socket.off('config:updated')
+      socket.off('event:updated')
+    }
+  }, [])
+
+  // Save to API whenever RSVPs change (but not if update came from WebSocket)
+  useEffect(() => {
+    if (!loading && !isUpdatingFromWebSocket.current) {
       saveRSVPs(rsvps).catch(err => {
         console.error('Error saving RSVPs:', err)
         setError('Failed to save RSVPs. Please try again.')
@@ -104,9 +223,9 @@ function App() {
     }
   }, [rsvps, loading])
 
-  // Save to API whenever menu categories change
+  // Save to API whenever menu categories change (but not if update came from WebSocket)
   useEffect(() => {
-    if (!loading) {
+    if (!loading && !isUpdatingFromWebSocket.current) {
       saveMenu(menuCategories).catch(err => {
         console.error('Error saving menu:', err)
         setError('Failed to save menu. Please try again.')
@@ -114,9 +233,9 @@ function App() {
     }
   }, [menuCategories, loading])
 
-  // Save to API whenever tables count, seats per table, table positions, custom areas, grid size, or table display names change
+  // Save to API whenever tables count, seats per table, table positions, custom areas, grid size, or table display names change (but not if update came from WebSocket)
   useEffect(() => {
-    if (!loading) {
+    if (!loading && !isUpdatingFromWebSocket.current) {
       saveConfig(tablesCount, seatsPerTable, tablePositions, customAreas, gridCols, gridRows, tableDisplayNames).catch(err => {
         console.error('Error saving config:', err)
         setError('Failed to save configuration. Please try again.')
@@ -141,6 +260,8 @@ function App() {
       table: null,
       submittedAt: new Date().toISOString()
     }
+    // Track this RSVP ID so SeatSelection knows to auto-sign in for this one
+    setPendingRSVPId(newRSVP.id)
     setRsvps([...rsvps, newRSVP])
     setCurrentStep('seating')
   }
@@ -405,6 +526,8 @@ function App() {
         ) : (
           <SeatSelection 
             rsvps={rsvps}
+            pendingRSVPId={pendingRSVPId}
+            onPendingRSVPProcessed={() => setPendingRSVPId(null)}
             tablesCount={tablesCount}
             seatsPerTable={seatsPerTable}
             tablePositions={tablePositions}

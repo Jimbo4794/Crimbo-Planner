@@ -1,1 +1,28 @@
-[]
+[
+  {
+    "id": "1762551936459",
+    "driverName": "James",
+    "whereFrom": "Hursley",
+    "availableSeats": 3,
+    "passengers": [
+      {
+        "name": "Bob",
+        "joinedAt": "2025-11-07T21:45:42.470Z"
+      }
+    ],
+    "createdAt": "2025-11-07T21:45:36.459Z"
+  },
+  {
+    "id": "1762805104843",
+    "driverName": "Helen",
+    "whereFrom": "Bob",
+    "availableSeats": 1,
+    "passengers": [
+      {
+        "name": "Tim",
+        "joinedAt": "2025-11-10T20:05:11.751Z"
+      }
+    ],
+    "createdAt": "2025-11-10T20:05:04.843Z"
+  }
+]

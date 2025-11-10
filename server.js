@@ -1,4 +1,6 @@
 import express from 'express';
+import { createServer } from 'http';
+import { Server } from 'socket.io';
 import { readFileSync, writeFileSync, mkdirSync, existsSync, unlinkSync, openSync, closeSync } from 'fs';
 import { join, dirname } from 'path';
 import { fileURLToPath } from 'url';
@@ -7,7 +9,6 @@ import cors from 'cors';
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = dirname(__filename);
 
-const app = express();
 const PORT = process.env.PORT || (process.env.NODE_ENV === 'production' ? 80 : 3000);
 const DATA_DIR = process.env.DATA_DIR || join(__dirname, 'data');
 
@@ -16,7 +17,6 @@ if (!existsSync(DATA_DIR)) {
   mkdirSync(DATA_DIR, { recursive: true });
 }
 
-// Middleware
 // Configure CORS - Since frontend and backend are served from same origin (same domain/port),
 // CORS isn't strictly needed, but we enable it for flexibility.
 // If you need to restrict to specific domains (e.g., separate frontend/backend), set CORS_ORIGIN env var:
@@ -26,7 +26,40 @@ const corsOptions = process.env.CORS_ORIGIN
       origin: process.env.CORS_ORIGIN.split(',').map(origin => origin.trim()),
       credentials: true 
     }
-  : {}; // Default: allow all origins (safe for same-origin setup)
+  : {
+      // In development, allow Vite dev server (port 5173) and same origin
+      origin: process.env.NODE_ENV === 'production' 
+        ? true  // Allow all origins in production (or set CORS_ORIGIN)
+        : ['http://localhost:5173', 'http://localhost:3000', 'http://127.0.0.1:5173', 'http://127.0.0.1:3000'],
+      credentials: true,
+      methods: ['GET', 'POST', 'PUT', 'DELETE', 'OPTIONS']
+    };
+
+const app = express();
+const httpServer = createServer(app);
+
+// Socket.io CORS configuration - needs to be more explicit
+const socketCorsOptions = process.env.CORS_ORIGIN 
+  ? { 
+      origin: process.env.CORS_ORIGIN.split(',').map(origin => origin.trim()),
+      credentials: true,
+      methods: ['GET', 'POST']
+    }
+  : {
+      // In development, allow Vite dev server and same origin
+      origin: process.env.NODE_ENV === 'production' 
+        ? true  // Allow all origins in production
+        : ['http://localhost:5173', 'http://localhost:3000', 'http://127.0.0.1:5173', 'http://127.0.0.1:3000'],
+      credentials: true,
+      methods: ['GET', 'POST']
+    };
+
+const io = new Server(httpServer, {
+  cors: socketCorsOptions,
+  allowEIO3: true
+});
+
+// Middleware
 app.use(cors(corsOptions));
 app.use(express.json({ limit: '10mb' }));
 app.use(express.urlencoded({ extended: true, limit: '10mb' }));
@@ -201,6 +234,10 @@ app.put('/api/rsvps', async (req, res) => {
       return rsvps;
     });
     
+    // Emit real-time update to all connected clients
+    console.log(`Emitting rsvps:updated to ${io.sockets.sockets.size} connected clients`);
+    io.emit('rsvps:updated', savedRsvps);
+    
     res.json({ success: true, rsvps: savedRsvps });
   } catch (error) {
     console.error('Error saving RSVPs:', error);
@@ -214,11 +251,38 @@ app.put('/api/rsvps', async (req, res) => {
   }
 });
 
+// Helper function to convert old menu object format to array format
+const normalizeMenuToArray = (menu) => {
+  if (!menu) return null;
+  if (Array.isArray(menu)) return menu;
+  
+  // Handle old object format with numeric keys
+  if (typeof menu === 'object' && !Array.isArray(menu)) {
+    const keys = Object.keys(menu).filter(key => key !== '_version' && !isNaN(parseInt(key)));
+    if (keys.length > 0) {
+      // Convert object with numeric keys to array
+      const sortedKeys = keys.sort((a, b) => parseInt(a) - parseInt(b));
+      return sortedKeys.map(key => menu[key]);
+    }
+  }
+  
+  return menu;
+};
+
 // Menu endpoints
 app.get('/api/menu', (req, res) => {
   try {
     const menu = readJSONFile('menu.json');
-    res.json(menu || null);
+    const normalizedMenu = normalizeMenuToArray(menu);
+    
+    // If we had to normalize, save it back in the correct format
+    if (normalizedMenu && normalizedMenu !== menu && Array.isArray(normalizedMenu)) {
+      writeJSONFile('menu.json', normalizedMenu).catch(err => {
+        console.error('Error saving normalized menu:', err);
+      });
+    }
+    
+    res.json(normalizedMenu || null);
   } catch (error) {
     console.error('Error reading menu:', error);
     res.status(500).json({ error: 'Failed to read menu' });
@@ -236,6 +300,9 @@ app.put('/api/menu', async (req, res) => {
     const savedMenu = await readModifyWriteJSONFile('menu.json', () => {
       return menuCategories;
     });
+    
+    // Emit real-time update to all connected clients
+    io.emit('menu:updated', savedMenu);
     
     res.json({ success: true, menuCategories: savedMenu });
   } catch (error) {
@@ -271,6 +338,9 @@ app.put('/api/liftshares', async (req, res) => {
       return liftShares;
     });
     
+    // Emit real-time update to all connected clients
+    io.emit('liftshares:updated', savedLiftShares);
+    
     res.json({ success: true, liftShares: savedLiftShares });
   } catch (error) {
     console.error('Error saving lift shares:', error);
@@ -304,6 +374,9 @@ app.put('/api/event', async (req, res) => {
     const savedEventDetails = await readModifyWriteJSONFile('event.json', () => {
       return eventDetails;
     });
+    
+    // Emit real-time update to all connected clients
+    io.emit('event:updated', savedEventDetails);
     
     res.json({ success: true, eventDetails: savedEventDetails });
   } catch (error) {
@@ -340,6 +413,9 @@ app.post('/api/feedback', async (req, res) => {
       return [...feedbackList, newFeedback];
     });
     
+    // Emit real-time update to all connected clients
+    io.emit('feedback:updated', savedFeedback);
+    
     res.json({ success: true, feedback: newFeedback });
   } catch (error) {
     console.error('Error saving feedback:', error);
@@ -360,6 +436,9 @@ app.delete('/api/feedback/:id', async (req, res) => {
       const feedbackList = currentFeedback || [];
       return feedbackList.filter(f => f.id !== id);
     });
+    
+    // Emit real-time update to all connected clients
+    io.emit('feedback:updated', updatedFeedback);
     
     res.json({ success: true, feedback: updatedFeedback });
   } catch (error) {
@@ -423,6 +502,9 @@ app.put('/api/config', async (req, res) => {
       return { ...existingConfig, ...config };
     });
     
+    // Emit real-time update to all connected clients
+    io.emit('config:updated', savedConfig);
+    
     res.json({ success: true, ...savedConfig });
   } catch (error) {
     console.error('Error saving config:', error);
@@ -441,8 +523,21 @@ if (existsSync(distPath)) {
   });
 }
 
-app.listen(PORT, () => {
+// Socket.io connection handling
+io.on('connection', (socket) => {
+  console.log(`✅ Client connected: ${socket.id} (Total clients: ${io.sockets.sockets.size})`);
+  
+  socket.on('disconnect', (reason) => {
+    console.log(`❌ Client disconnected: ${socket.id}, reason: ${reason} (Total clients: ${io.sockets.sockets.size})`);
+  });
+  
+  // Send a test message on connection
+  socket.emit('test', { message: 'WebSocket connection established' });
+});
+
+httpServer.listen(PORT, () => {
   console.log(`Server running on port ${PORT}`);
   console.log(`Data directory: ${DATA_DIR}`);
+  console.log(`WebSocket server ready for real-time updates`);
 });
 

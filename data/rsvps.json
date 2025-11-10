@@ -40,12 +40,32 @@
     "submittedAt": "2025-11-07T09:07:46.704Z"
   },
   {
-    "id": "1762506491209",
-    "name": "test2",
-    "email": "test2@test.com",
+    "id": "1762804434223",
+    "name": "RSPV",
+    "email": "RSPV@test.com",
     "menuChoices": [
-      "turkey",
       "soup",
+      "vegetarian",
+      "cheesecake"
+    ],
+    "dietaryRequirements": "",
+    "vegetarian": true,
+    "vegan": false,
+    "glutenIntolerant": false,
+    "lactoseIntolerant": false,
+    "icon": "🎀",
+    "iconType": "emoji",
+    "seat": 8,
+    "table": 1,
+    "submittedAt": "2025-11-10T19:53:54.223Z"
+  },
+  {
+    "id": "1762804830534",
+    "name": "RSPV2",
+    "email": "RSPV2@test.com",
+    "menuChoices": [
+      "soup",
+      "turkey",
       "pudding"
     ],
     "dietaryRequirements": "",
@@ -53,10 +73,30 @@
     "vegan": false,
     "glutenIntolerant": false,
     "lactoseIntolerant": false,
-    "icon": "🕯️",
+    "icon": "🔔",
     "iconType": "emoji",
-    "seat": 1,
-    "table": 2,
-    "submittedAt": "2025-11-07T09:08:11.209Z"
+    "seat": 2,
+    "table": 4,
+    "submittedAt": "2025-11-10T20:00:30.534Z"
+  },
+  {
+    "id": "1762805059432",
+    "name": "RSPV2",
+    "email": "RSPV3@test.com",
+    "menuChoices": [
+      "soup",
+      "turkey",
+      "pudding"
+    ],
+    "dietaryRequirements": "",
+    "vegetarian": false,
+    "vegan": false,
+    "glutenIntolerant": false,
+    "lactoseIntolerant": false,
+    "icon": "🎊",
+    "iconType": "emoji",
+    "seat": 6,
+    "table": 3,
+    "submittedAt": "2025-11-10T20:04:19.432Z"
   }
 ]

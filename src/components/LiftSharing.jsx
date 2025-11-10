@@ -1,6 +1,7 @@
-import { useState, useEffect } from 'react'
+import { useState, useEffect, useRef } from 'react'
 import './LiftSharing.css'
 import { fetchLiftShares, saveLiftShares } from '../api'
+import { getSocket } from '../utils/websocket'
 
 function LiftSharing({ onBackToMenu, rsvps = [] }) {
   const [liftShares, setLiftShares] = useState([])
@@ -18,9 +19,31 @@ function LiftSharing({ onBackToMenu, rsvps = [] }) {
   // Passenger form state
   const [passengerName, setPassengerName] = useState('')
   const [passengerErrors, setPassengerErrors] = useState({})
+  
+  // Ref to track if updates are from WebSocket (to prevent infinite save loops)
+  const isUpdatingFromWebSocket = useRef(false)
 
   useEffect(() => {
     loadLiftShares()
+  }, [])
+  
+  // Set up WebSocket listener for real-time lift share updates
+  useEffect(() => {
+    const socket = getSocket()
+    
+    socket.on('liftshares:updated', (updatedLiftShares) => {
+      if (Array.isArray(updatedLiftShares)) {
+        isUpdatingFromWebSocket.current = true
+        setLiftShares(updatedLiftShares)
+        setTimeout(() => {
+          isUpdatingFromWebSocket.current = false
+        }, 100)
+      }
+    })
+    
+    return () => {
+      socket.off('liftshares:updated')
+    }
   }, [])
 
   const loadLiftShares = async () => {
@@ -63,8 +86,8 @@ function LiftSharing({ onBackToMenu, rsvps = [] }) {
 
     try {
       const updated = [...liftShares, newLiftShare]
-      await saveLiftShares(updated)
       setLiftShares(updated)
+      await saveLiftShares(updated)
       setShowDriverForm(false)
       setDriverName('')
       setWhereFrom('')
@@ -132,8 +155,8 @@ function LiftSharing({ onBackToMenu, rsvps = [] }) {
           ? { ...ls, passengers: [...ls.passengers, newPassenger] }
           : ls
       )
-      await saveLiftShares(updated)
       setLiftShares(updated)
+      await saveLiftShares(updated)
       setShowPassengerForm(false)
       setSelectedLiftId(null)
       setPassengerName('')
@@ -155,8 +178,8 @@ function LiftSharing({ onBackToMenu, rsvps = [] }) {
           ? { ...ls, passengers: ls.passengers.filter((_, index) => index !== passengerIndex) }
           : ls
       )
-      await saveLiftShares(updated)
       setLiftShares(updated)
+      await saveLiftShares(updated)
     } catch (error) {
       console.error('Error removing passenger:', error)
       alert('Failed to remove passenger. Please try again.')
@@ -170,8 +193,8 @@ function LiftSharing({ onBackToMenu, rsvps = [] }) {
 
     try {
       const updated = liftShares.filter(ls => ls.id !== liftId)
-      await saveLiftShares(updated)
       setLiftShares(updated)
+      await saveLiftShares(updated)
     } catch (error) {
       console.error('Error removing lift:', error)
       alert('Failed to remove lift. Please try again.')

@@ -1,10 +1,10 @@
-import { useState, useEffect, useRef } from 'react'
+import { useState, useEffect, useRef, useMemo } from 'react'
 import { createPortal } from 'react-dom'
 import './SeatSelection.css'
 import { conflictsWithDietaryPreferences } from '../utils/dietaryConflicts'
 import { AUTO_SIGNIN_TIMEOUT } from '../utils/constants'
 
-function SeatSelection({ rsvps, tablesCount = 5, seatsPerTable = 8, tablePositions = null, customAreas = null, gridCols = 12, gridRows = 8, tableDisplayNames = null, onSeatSelect, onChangeSeat, onUpdateMenuChoices, onUpdateDietaryRequirements, onUpdateDietaryPreferences, onBackToMenu, onNavigate, menuCategories = [] }) {
+function SeatSelection({ rsvps, pendingRSVPId = null, onPendingRSVPProcessed = null, tablesCount = 5, seatsPerTable = 8, tablePositions = null, customAreas = null, gridCols = 12, gridRows = 8, tableDisplayNames = null, onSeatSelect, onChangeSeat, onUpdateMenuChoices, onUpdateDietaryRequirements, onUpdateDietaryPreferences, onBackToMenu, onNavigate, menuCategories = [] }) {
   const [lookupEmail, setLookupEmail] = useState('')
   const [lookupError, setLookupError] = useState('')
   const [foundRSVP, setFoundRSVP] = useState(null)
@@ -66,38 +66,49 @@ function SeatSelection({ rsvps, tablesCount = 5, seatsPerTable = 8, tablePositio
   // Get the latest RSVP (the one that just submitted) - used for display purposes
   const latestRSVP = rsvps.length > 0 ? rsvps[rsvps.length - 1] : null
   
-  // Auto-sign in user if they just submitted an RSVP
+  // Auto-sign in user if they just submitted an RSVP locally (not from WebSocket)
   useEffect(() => {
-    // If there's a latest RSVP and no found RSVP, and user hasn't explicitly signed out, auto-sign them in
-    // This happens when user submits an RSVP and is redirected to seating
-    if (latestRSVP && !foundRSVP && !explicitlySignedOut) {
-      // Check if this RSVP was recently submitted (within last 2 minutes)
-      // This ensures we only auto-sign in for new submissions, not old ones loaded from storage
-      const submittedTime = new Date(latestRSVP.submittedAt).getTime()
-      const now = Date.now()
-      const timeDiff = now - submittedTime
-      
-      // Auto-sign in if submitted within last 2 minutes (plenty of time for navigation)
-      if (timeDiff < AUTO_SIGNIN_TIMEOUT) {
-        setFoundRSVP(latestRSVP)
+    // Only auto-sign in if:
+    // 1. There's a pending RSVP ID (meaning user just submitted locally)
+    // 2. The latest RSVP matches the pending ID
+    // 3. User hasn't already signed in
+    // 4. User hasn't explicitly signed out
+    if (pendingRSVPId && latestRSVP && latestRSVP.id === pendingRSVPId && !foundRSVP && !explicitlySignedOut) {
+      console.log('🔐 Auto-signing in user for locally created RSVP:', latestRSVP.email)
+      setFoundRSVP(latestRSVP)
+      // Clear the pending RSVP ID after processing
+      if (onPendingRSVPProcessed) {
+        onPendingRSVPProcessed()
       }
     }
-  }, [latestRSVP, foundRSVP, explicitlySignedOut])
+  }, [pendingRSVPId, latestRSVP, foundRSVP, explicitlySignedOut, onPendingRSVPProcessed])
   
   // User is "signed in" if they've looked up their reservation via email OR if they just submitted an RSVP
   // But not if they've explicitly signed out
   const isSignedIn = !explicitlySignedOut && !!foundRSVP
   const currentUser = foundRSVP
 
+  // Debug: Log when rsvps prop changes
+  useEffect(() => {
+    console.log('🪑 SeatSelection: rsvps prop updated', rsvps.length, 'RSVPs')
+    const seatsWithAssignments = rsvps.filter(r => r.table && r.seat).length
+    console.log('🪑 SeatSelection: RSVPs with seat assignments:', seatsWithAssignments)
+  }, [rsvps])
+
   // Create a map of occupied seats
   // Include all seats, including the current user's seat (so we can display it)
-  const occupiedSeats = {}
-  rsvps.forEach(rsvp => {
-    if (rsvp.table && rsvp.seat) {
-      const key = `${rsvp.table}-${rsvp.seat}`
-      occupiedSeats[key] = rsvp
-    }
-  })
+  // Use useMemo to ensure it recalculates when rsvps changes
+  const occupiedSeats = useMemo(() => {
+    const seats = {}
+    rsvps.forEach(rsvp => {
+      if (rsvp.table && rsvp.seat) {
+        const key = `${rsvp.table}-${rsvp.seat}`
+        seats[key] = rsvp
+      }
+    })
+    console.log('🪑 SeatSelection: Recalculated occupiedSeats, count:', Object.keys(seats).length)
+    return seats
+  }, [rsvps])
 
   const handleSeatClick = (tableNumber, seatNumber) => {
     // Only allow seat selection if user is signed in
@@ -626,6 +637,15 @@ function SeatSelection({ rsvps, tablesCount = 5, seatsPerTable = 8, tablePositio
       <div className="seat-selection-container">
 
       <div className="seat-selection-header">
+        <div className="header-actions">
+          <button 
+            onClick={() => setShowLookupDialog(true)} 
+            className="lookup-reservation-button"
+            title="Look up your reservation by email"
+          >
+            🔍 Lookup Reservation
+          </button>
+        </div>
         <h2>Choose Your Seat</h2>
 
         {/* Show user info if signed in */}
@@ -789,7 +809,7 @@ function SeatSelection({ rsvps, tablesCount = 5, seatsPerTable = 8, tablePositio
             {isSignedIn && currentUser && currentUser.seat && (
               <>
                 <p className="change-seat-instruction">Select a new seat below to change your reservation:</p>
-                <button onClick={handleSignOut} className="cancel-button">Sign Out</button>
+                <button onClick={handleSignOut} className="done-button">Done</button>
               </>
             )}
             {isSignedIn && currentUser && !currentUser.seat && (
