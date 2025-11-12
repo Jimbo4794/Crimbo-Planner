@@ -1,4 +1,5 @@
 import { io } from 'socket.io-client';
+import logger from './logger.js';
 
 // Create a singleton socket connection
 let socket = null;
@@ -10,7 +11,7 @@ export const getSocket = () => {
     // In production, same origin means it connects directly to the server
     const serverUrl = window.location.origin;
     
-    console.log('🔌 Connecting WebSocket to:', serverUrl);
+    logger.info('Connecting WebSocket to:', serverUrl);
     
     socket = io(serverUrl, {
       transports: ['websocket', 'polling'],
@@ -21,15 +22,15 @@ export const getSocket = () => {
     });
 
     socket.on('connect', () => {
-      console.log('✅ WebSocket connected, socket ID:', socket.id);
+      logger.info('WebSocket connected, socket ID:', socket.id);
     });
 
     socket.on('disconnect', (reason) => {
-      console.log('❌ WebSocket disconnected, reason:', reason);
+      logger.warn('WebSocket disconnected, reason:', reason);
     });
 
     socket.on('connect_error', (error) => {
-      console.error('❌ WebSocket connection error:', error);
+      logger.error('WebSocket connection error:', error);
     });
   }
   

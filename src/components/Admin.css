@@ -1039,6 +1039,38 @@
   transform: translateY(-2px);
 }
 
+.backup-button {
+  background: linear-gradient(135deg, var(--primary-color) 0%, var(--primary-hover) 100%);
+  color: white;
+  border: none;
+  padding: 0.625rem 1.25rem;
+  border-radius: var(--radius);
+  font-size: 0.875rem;
+  font-weight: 500;
+  cursor: pointer;
+  transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+  box-shadow: var(--shadow-sm), 0 0 15px var(--primary-glow);
+  width: 100%;
+}
+
+.backup-button:hover:not(:disabled) {
+  background: linear-gradient(135deg, var(--primary-hover) 0%, var(--primary-color) 100%);
+  box-shadow: var(--shadow-md), 0 0 25px var(--primary-glow);
+  transform: translateY(-2px);
+}
+
+.backup-button:disabled {
+  opacity: 0.6;
+  cursor: not-allowed;
+}
+
+.backup-message {
+  margin-top: 1rem;
+  padding: 0.75rem;
+  border-radius: var(--radius);
+  font-size: 0.875rem;
+}
+
 .import-file-label {
   display: inline-block;
   cursor: pointer;
@@ -1725,5 +1757,337 @@
   .feedback-actions {
     width: 100%;
     justify-content: space-between;
+  }
+}
+
+/* Lock Controls */
+.lock-controls {
+  background: rgba(30, 41, 59, 0.6);
+  border: 1px solid var(--border-color);
+  border-radius: var(--radius);
+  padding: 1.5rem;
+  margin-bottom: 2rem;
+  box-shadow: var(--shadow-sm);
+  transition: all 0.3s ease;
+}
+
+.lock-controls:hover {
+  box-shadow: var(--shadow-md), 0 0 15px var(--primary-glow);
+  border-color: var(--primary-color);
+}
+
+.lock-controls h4 {
+  color: var(--text-color);
+  margin-top: 0;
+  margin-bottom: 1rem;
+  font-size: 1.125rem;
+  font-weight: 600;
+}
+
+.lock-controls-row {
+  display: flex;
+  gap: 2rem;
+  flex-wrap: wrap;
+  margin-bottom: 0.5rem;
+}
+
+.lock-control-item {
+  display: flex;
+  align-items: center;
+  gap: 0.75rem;
+  padding: 0.75rem 1rem;
+  background: rgba(15, 23, 42, 0.4);
+  border-radius: var(--radius);
+  border: 1px solid var(--border-color);
+  transition: all 0.3s ease;
+}
+
+.lock-control-item:hover {
+  background: rgba(15, 23, 42, 0.6);
+  border-color: var(--primary-color);
+}
+
+.lock-control-item label {
+  font-weight: 600;
+  color: var(--text-color);
+  cursor: pointer;
+  font-size: 0.9375rem;
+  user-select: none;
+}
+
+.lock-control-item input[type="checkbox"] {
+  width: 20px;
+  height: 20px;
+  cursor: pointer;
+  accent-color: var(--primary-color);
+}
+
+.lock-status {
+  font-weight: 600;
+  font-size: 0.9375rem;
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+}
+
+.lock-status.locked {
+  color: #ef4444;
+}
+
+.lock-status.unlocked {
+  color: #10b981;
+}
+
+.lock-controls-description {
+  margin-top: 1rem;
+  font-size: 0.875rem;
+  color: var(--text-light);
+  line-height: 1.5;
+}
+
+/* Award Management Styles */
+.award-management-section {
+  background: rgba(30, 41, 59, 0.85);
+  backdrop-filter: blur(20px);
+  -webkit-backdrop-filter: blur(20px);
+  border-radius: var(--radius-lg);
+  padding: 2rem;
+  box-shadow: var(--shadow-lg), var(--shadow-glow);
+  border: 1px solid var(--border-color);
+}
+
+.award-management-section h3 {
+  color: var(--text-color);
+  margin-bottom: 0.5rem;
+  font-size: 1.25rem;
+  font-weight: 600;
+}
+
+.section-description {
+  color: var(--text-light);
+  margin-bottom: 2rem;
+  font-size: 0.9375rem;
+}
+
+.award-message {
+  padding: 0.75rem 1rem;
+  border-radius: var(--radius);
+  margin-bottom: 1.5rem;
+  font-size: 0.9375rem;
+}
+
+.award-form-section {
+  background: rgba(15, 23, 42, 0.4);
+  border-radius: var(--radius);
+  padding: 1.5rem;
+  margin-bottom: 2rem;
+  border: 1px solid var(--border-color);
+}
+
+.award-form-section h4 {
+  color: var(--text-color);
+  margin-bottom: 1rem;
+  font-size: 1rem;
+  font-weight: 600;
+}
+
+.award-form-row {
+  display: grid;
+  grid-template-columns: 1fr auto;
+  gap: 1rem;
+  align-items: end;
+}
+
+.award-form-row .form-group {
+  display: flex;
+  flex-direction: column;
+  gap: 0.5rem;
+}
+
+.award-form-row label {
+  font-weight: 500;
+  color: var(--text-color);
+  font-size: 0.875rem;
+}
+
+.award-form-row input {
+  padding: 0.625rem 0.875rem;
+  border: 1px solid var(--border-color);
+  border-radius: var(--radius);
+  font-size: 0.9375rem;
+  background: rgba(15, 23, 42, 0.6);
+  color: var(--text-color);
+  font-family: inherit;
+  transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+}
+
+.award-form-row input:focus {
+  outline: none;
+  border-color: var(--primary-color);
+  box-shadow: 0 0 0 3px var(--primary-glow);
+  background: rgba(15, 23, 42, 0.8);
+}
+
+.add-award-button {
+  background: linear-gradient(135deg, var(--success-color) 0%, #059669 100%);
+  color: white;
+  border: none;
+  padding: 0.625rem 1.25rem;
+  border-radius: var(--radius);
+  font-size: 0.875rem;
+  font-weight: 500;
+  cursor: pointer;
+  transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+  box-shadow: var(--shadow-sm), 0 0 15px var(--success-glow);
+  white-space: nowrap;
+  height: fit-content;
+}
+
+.add-award-button:hover:not(:disabled) {
+  background: linear-gradient(135deg, #059669 0%, var(--success-color) 100%);
+  box-shadow: var(--shadow-md), 0 0 25px var(--success-glow);
+  transform: translateY(-2px);
+}
+
+.add-award-button:disabled {
+  opacity: 0.6;
+  cursor: not-allowed;
+}
+
+.awards-list-section {
+  margin-top: 2rem;
+}
+
+.awards-list-section h4 {
+  color: var(--text-color);
+  margin-bottom: 1rem;
+  font-size: 1rem;
+  font-weight: 600;
+}
+
+.no-awards {
+  color: var(--text-light);
+  font-style: italic;
+  text-align: center;
+  padding: 2rem;
+}
+
+.awards-list {
+  display: flex;
+  flex-direction: column;
+  gap: 1rem;
+}
+
+.award-item {
+  background: rgba(15, 23, 42, 0.4);
+  border-radius: var(--radius);
+  padding: 1rem;
+  border: 1px solid var(--border-color);
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  gap: 1rem;
+  transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+}
+
+.award-item:hover {
+  border-color: var(--primary-color);
+  background: rgba(15, 23, 42, 0.6);
+}
+
+.award-display {
+  display: flex;
+  align-items: center;
+  flex: 1;
+}
+
+.award-label-display {
+  color: var(--text-color);
+  font-weight: 500;
+  font-size: 1rem;
+}
+
+.award-actions {
+  display: flex;
+  gap: 0.5rem;
+}
+
+.move-button,
+.edit-button,
+.delete-button,
+.save-button,
+.cancel-button {
+  padding: 0.5rem 0.75rem;
+  border-radius: var(--radius);
+  font-size: 0.875rem;
+  font-weight: 500;
+  cursor: pointer;
+  transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+  border: 1px solid var(--border-color);
+  background: rgba(15, 23, 42, 0.6);
+  color: var(--text-color);
+}
+
+.move-button:hover:not(:disabled),
+.edit-button:hover,
+.save-button:hover:not(:disabled) {
+  background: rgba(59, 130, 246, 0.2);
+  border-color: var(--primary-color);
+  box-shadow: 0 0 15px var(--primary-glow);
+}
+
+.delete-button:hover {
+  background: rgba(239, 68, 68, 0.2);
+  border-color: var(--error-color);
+  box-shadow: 0 0 15px var(--error-glow);
+}
+
+.cancel-button:hover {
+  background: rgba(15, 23, 42, 0.8);
+  border-color: var(--border-color);
+}
+
+.move-button:disabled {
+  opacity: 0.4;
+  cursor: not-allowed;
+}
+
+.award-edit-form {
+  display: grid;
+  grid-template-columns: 1fr auto;
+  gap: 1rem;
+  width: 100%;
+  align-items: end;
+}
+
+.award-edit-actions {
+  display: flex;
+  gap: 0.5rem;
+}
+
+.save-button {
+  background: linear-gradient(135deg, var(--success-color) 0%, #059669 100%);
+  color: white;
+  border: none;
+}
+
+.cancel-button {
+  background: rgba(15, 23, 42, 0.6);
+  color: var(--text-color);
+}
+
+@media (max-width: 768px) {
+  .award-form-row,
+  .award-edit-form {
+    grid-template-columns: 1fr;
+  }
+
+  .award-item {
+    flex-direction: column;
+    align-items: stretch;
+  }
+
+  .award-actions {
+    flex-wrap: wrap;
   }
 }

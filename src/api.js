@@ -52,13 +52,13 @@ export const fetchConfig = async () => {
   return handleResponse(response);
 };
 
-export const saveConfig = async (tablesCount, seatsPerTable, tablePositions = null, customAreas = null, gridCols = null, gridRows = null, tableDisplayNames = null) => {
+export const saveConfig = async (tablesCount, seatsPerTable, tablePositions = null, customAreas = null, gridCols = null, gridRows = null, tableDisplayNames = null, rsvpLocked = null, seatingLocked = null) => {
   const response = await fetch(`${API_BASE}/config`, {
     method: 'PUT',
     headers: {
       'Content-Type': 'application/json',
     },
-    body: JSON.stringify({ tablesCount, seatsPerTable, tablePositions, customAreas, gridCols, gridRows, tableDisplayNames }),
+    body: JSON.stringify({ tablesCount, seatsPerTable, tablePositions, customAreas, gridCols, gridRows, tableDisplayNames, rsvpLocked, seatingLocked }),
   });
   return handleResponse(response);
 };
@@ -155,6 +155,54 @@ export const checkAdminSession = async (sessionId) => {
       'Content-Type': 'application/json',
       'x-admin-session': sessionId,
     },
+  });
+  return handleResponse(response);
+};
+
+// Framies API
+export const fetchFramies = async () => {
+  const response = await fetch(`${API_BASE}/framies`);
+  const data = await handleResponse(response);
+  return data || { nominations: [], votes: [] };
+};
+
+export const saveFramies = async (framiesData) => {
+  const response = await fetch(`${API_BASE}/framies`, {
+    method: 'PUT',
+    headers: {
+      'Content-Type': 'application/json',
+    },
+    body: JSON.stringify({ framiesData }),
+  });
+  return handleResponse(response);
+};
+
+// Admin Backup API
+export const createManualBackup = async (sessionId) => {
+  const response = await fetch(`${API_BASE}/admin/backup`, {
+    method: 'POST',
+    headers: {
+      'Content-Type': 'application/json',
+      'x-admin-session': sessionId,
+    },
+  });
+  return handleResponse(response);
+};
+
+// Awards API
+export const fetchAwards = async () => {
+  const response = await fetch(`${API_BASE}/awards`);
+  const data = await handleResponse(response);
+  return Array.isArray(data) ? data : [];
+};
+
+export const saveAwards = async (awards) => {
+  const response = await fetch(`${API_BASE}/awards`, {
+    method: 'PUT',
+    headers: {
+      'Content-Type': 'application/json',
+    },
+    body: JSON.stringify({ awards }),
   });
   return handleResponse(response);
 };

@@ -6,9 +6,11 @@ import Admin from './components/Admin'
 import LiftSharing from './components/LiftSharing'
 import EventDetails from './components/EventDetails'
 import Feedback from './components/Feedback'
+import Framies from './components/Framies'
 import { fetchRSVPs, saveRSVPs, fetchMenu, saveMenu, fetchConfig, saveConfig, fetchEventDetails, saveEventDetails } from './api'
 import { DEFAULT_TABLES_COUNT, DEFAULT_SEATS_PER_TABLE } from './utils/constants'
 import { getSocket, disconnectSocket } from './utils/websocket'
+import logger from './utils/logger'
 import './App.css'
 
 const DEFAULT_MENU_CATEGORIES = [
@@ -71,7 +73,9 @@ function App() {
   const [gridRows, setGridRows] = useState(8) // Number of rows in arrangement grid
   const [tableDisplayNames, setTableDisplayNames] = useState(null) // Object mapping tableNumber to display name
   const [eventDetails, setEventDetails] = useState(null) // Event details object
-  const [currentStep, setCurrentStep] = useState('menu') // 'menu', 'rsvp', 'seating', 'liftsharing', 'eventdetails', 'feedback', or 'admin'
+  const [rsvpLocked, setRsvpLocked] = useState(false) // Lock state for RSVP submissions
+  const [seatingLocked, setSeatingLocked] = useState(false) // Lock state for seat changes
+  const [currentStep, setCurrentStep] = useState('menu') // 'menu', 'rsvp', 'seating', 'liftsharing', 'eventdetails', 'feedback', 'framies', or 'admin'
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState(null)
   const [rsvpsVersion, setRsvpsVersion] = useState(0) // Version counter to force re-renders
@@ -109,9 +113,11 @@ function App() {
         setGridCols(configData.gridCols || 12)
         setGridRows(configData.gridRows || 8)
         setTableDisplayNames(configData.tableDisplayNames || null)
+        setRsvpLocked(configData.rsvpLocked || false)
+        setSeatingLocked(configData.seatingLocked || false)
         setEventDetails(eventData)
       } catch (err) {
-        console.error('Error loading data:', err)
+        logger.error('Error loading data:', err)
         setError('Failed to load data. Please refresh the page.')
       } finally {
         setLoading(false)
@@ -127,17 +133,17 @@ function App() {
     
     // Test connection
     socket.on('test', (data) => {
-      console.log('✅ Test event received from server:', data)
+      logger.debug('Test event received from server:', data)
     })
 
     // Listen for RSVP updates
     socket.on('rsvps:updated', (updatedRsvps) => {
-      console.log('📥 Received rsvps:updated event', updatedRsvps?.length, 'RSVPs')
+      logger.debug('Received rsvps:updated event', updatedRsvps?.length, 'RSVPs')
       if (Array.isArray(updatedRsvps)) {
         isUpdatingFromWebSocket.current = true
         // Create a new array reference to ensure React detects the change
         const newRsvps = [...updatedRsvps]
-        console.log('🔄 Updating RSVPs state from WebSocket, new count:', newRsvps.length)
+        logger.debug('Updating RSVPs state from WebSocket, new count:', newRsvps.length)
         setRsvps(newRsvps)
         // Increment version to force re-render
         setRsvpsVersion(prev => prev + 1)
@@ -187,6 +193,12 @@ function App() {
         if (updatedConfig.tableDisplayNames !== undefined) {
           setTableDisplayNames(updatedConfig.tableDisplayNames)
         }
+        if (updatedConfig.rsvpLocked !== undefined) {
+          setRsvpLocked(updatedConfig.rsvpLocked)
+        }
+        if (updatedConfig.seatingLocked !== undefined) {
+          setSeatingLocked(updatedConfig.seatingLocked)
+        }
         setTimeout(() => {
           isUpdatingFromWebSocket.current = false
         }, 100)
@@ -217,7 +229,7 @@ function App() {
   useEffect(() => {
     if (!loading && !isUpdatingFromWebSocket.current) {
       saveRSVPs(rsvps).catch(err => {
-        console.error('Error saving RSVPs:', err)
+        logger.error('Error saving RSVPs:', err)
         setError('Failed to save RSVPs. Please try again.')
       })
     }
@@ -227,21 +239,21 @@ function App() {
   useEffect(() => {
     if (!loading && !isUpdatingFromWebSocket.current) {
       saveMenu(menuCategories).catch(err => {
-        console.error('Error saving menu:', err)
+        logger.error('Error saving menu:', err)
         setError('Failed to save menu. Please try again.')
       })
     }
   }, [menuCategories, loading])
 
-  // Save to API whenever tables count, seats per table, table positions, custom areas, grid size, or table display names change (but not if update came from WebSocket)
+  // Save to API whenever tables count, seats per table, table positions, custom areas, grid size, table display names, or lock states change (but not if update came from WebSocket)
   useEffect(() => {
     if (!loading && !isUpdatingFromWebSocket.current) {
-      saveConfig(tablesCount, seatsPerTable, tablePositions, customAreas, gridCols, gridRows, tableDisplayNames).catch(err => {
-        console.error('Error saving config:', err)
+      saveConfig(tablesCount, seatsPerTable, tablePositions, customAreas, gridCols, gridRows, tableDisplayNames, rsvpLocked, seatingLocked).catch(err => {
+        logger.error('Error saving config:', err)
         setError('Failed to save configuration. Please try again.')
       })
     }
-  }, [tablesCount, seatsPerTable, tablePositions, customAreas, gridCols, gridRows, tableDisplayNames, loading])
+  }, [tablesCount, seatsPerTable, tablePositions, customAreas, gridCols, gridRows, tableDisplayNames, rsvpLocked, seatingLocked, loading])
 
   const handleRSVPSubmit = (rsvpData) => {
     const newRSVP = {
@@ -428,6 +440,14 @@ function App() {
     setSeatsPerTable(newSeatsPerTable)
   }
 
+  const handleUpdateRsvpLocked = (locked) => {
+    setRsvpLocked(locked)
+  }
+
+  const handleUpdateSeatingLocked = (locked) => {
+    setSeatingLocked(locked)
+  }
+
   if (loading) {
     return (
       <div className="app">
@@ -486,6 +506,7 @@ function App() {
             onBackToMenu={handleBackToMenu}
             menuCategories={menuCategories}
             existingRSVPs={rsvps}
+            rsvpLocked={rsvpLocked}
           />
         ) : currentStep === 'liftsharing' ? (
           <LiftSharing 
@@ -501,6 +522,11 @@ function App() {
           <Feedback 
             onBackToMenu={handleBackToMenu}
           />
+        ) : currentStep === 'framies' ? (
+          <Framies 
+            onBackToMenu={handleBackToMenu}
+            rsvps={rsvps}
+          />
         ) : currentStep === 'admin' ? (
           <Admin 
             rsvps={rsvps}
@@ -512,6 +538,8 @@ function App() {
             gridCols={gridCols}
             gridRows={gridRows}
             eventDetails={eventDetails}
+            rsvpLocked={rsvpLocked}
+            seatingLocked={seatingLocked}
             onUpdateRSVPs={handleUpdateRSVPs}
             onUpdateMenuCategories={handleUpdateMenuCategories}
             onUpdateTablesCount={handleUpdateTablesCount}
@@ -521,6 +549,8 @@ function App() {
             onUpdateGridCols={setGridCols}
             onUpdateGridRows={setGridRows}
             onUpdateEventDetails={handleUpdateEventDetails}
+            onUpdateRsvpLocked={handleUpdateRsvpLocked}
+            onUpdateSeatingLocked={handleUpdateSeatingLocked}
             onBackToMenu={handleBackToMenu}
           />
         ) : (
@@ -535,6 +565,7 @@ function App() {
             gridCols={gridCols}
             gridRows={gridRows}
             tableDisplayNames={tableDisplayNames}
+            seatingLocked={seatingLocked}
             onSeatSelect={handleSeatSelection}
             onChangeSeat={handleChangeSeat}
             onUpdateMenuChoices={handleUpdateMenuChoices}

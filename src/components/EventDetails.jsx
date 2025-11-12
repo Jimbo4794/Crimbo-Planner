@@ -1,6 +1,7 @@
 import { useState, useEffect } from 'react'
 import './EventDetails.css'
 import { fetchEventDetails } from '../api'
+import logger from '../utils/logger'
 
 function EventDetails({ onBackToMenu, eventDetails: propEventDetails }) {
   const [eventDetails, setEventDetails] = useState({
@@ -34,7 +35,7 @@ function EventDetails({ onBackToMenu, eventDetails: propEventDetails }) {
         setEventDetails(data)
       }
     } catch (error) {
-      console.error('Error loading event details:', error)
+      logger.error('Error loading event details:', error)
     } finally {
       setLoading(false)
     }

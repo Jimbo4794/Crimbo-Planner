@@ -4,7 +4,7 @@ import ImageCropper from './ImageCropper'
 import { AVAILABLE_ICONS, MAX_IMAGE_SIZE } from '../utils/constants'
 import { conflictsWithDietaryPreferences } from '../utils/dietaryConflicts'
 
-function RSVPForm({ onSubmit, onBackToMenu, menuCategories = [], existingRSVPs = [] }) {
+function RSVPForm({ onSubmit, onBackToMenu, menuCategories = [], existingRSVPs = [], rsvpLocked = false }) {
   const [name, setName] = useState('')
   const [email, setEmail] = useState('')
   const [menuChoices, setMenuChoices] = useState([])
@@ -200,6 +200,13 @@ function RSVPForm({ onSubmit, onBackToMenu, menuCategories = [], existingRSVPs =
 
   const handleSubmit = (e) => {
     e.preventDefault()
+    
+    // Check if RSVPs are locked
+    if (rsvpLocked) {
+      alert('RSVP submissions are currently locked. Please contact the administrator if you need to make changes.')
+      return
+    }
+    
     const newErrors = {}
 
     if (!name.trim()) {
@@ -251,6 +258,27 @@ function RSVPForm({ onSubmit, onBackToMenu, menuCategories = [], existingRSVPs =
   return (
     <div className="rsvp-form-container">
       <h2>RSVP to the Christmas Party</h2>
+      {rsvpLocked && (
+        <div style={{
+          background: '#fff3cd',
+          border: '1px solid #ffc107',
+          borderRadius: '8px',
+          padding: '1rem',
+          marginBottom: '1.5rem',
+          color: '#856404',
+          display: 'flex',
+          alignItems: 'center',
+          gap: '0.5rem'
+        }}>
+          <span style={{ fontSize: '1.5rem' }}>🔒</span>
+          <div>
+            <strong>RSVP submissions are currently locked.</strong>
+            <p style={{ margin: '0.25rem 0 0 0', fontSize: '0.9rem' }}>
+              New RSVP submissions are not being accepted at this time. Please contact the administrator if you need assistance.
+            </p>
+          </div>
+        </div>
+      )}
       <form onSubmit={handleSubmit} className="rsvp-form">
         <div className="form-group">
           <label htmlFor="name">Name *</label>
@@ -476,8 +504,8 @@ function RSVPForm({ onSubmit, onBackToMenu, menuCategories = [], existingRSVPs =
         </div>
 
         <div className="form-actions">
-          <button type="submit" className="submit-button">
-            Submit RSVP
+          <button type="submit" className="submit-button" disabled={rsvpLocked}>
+            {rsvpLocked ? 'RSVP Submissions Locked' : 'Submit RSVP'}
           </button>
         </div>
       </form>

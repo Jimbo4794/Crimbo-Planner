@@ -2,6 +2,7 @@ import { useState, useEffect, useRef } from 'react'
 import './LiftSharing.css'
 import { fetchLiftShares, saveLiftShares } from '../api'
 import { getSocket } from '../utils/websocket'
+import logger from '../utils/logger'
 
 function LiftSharing({ onBackToMenu, rsvps = [] }) {
   const [liftShares, setLiftShares] = useState([])
@@ -52,7 +53,7 @@ function LiftSharing({ onBackToMenu, rsvps = [] }) {
       const data = await fetchLiftShares()
       setLiftShares(data || [])
     } catch (error) {
-      console.error('Error loading lift shares:', error)
+      logger.error('Error loading lift shares:', error)
     } finally {
       setLoading(false)
     }
@@ -94,7 +95,7 @@ function LiftSharing({ onBackToMenu, rsvps = [] }) {
       setAvailableSeats(1)
       setDriverErrors({})
     } catch (error) {
-      console.error('Error saving lift share:', error)
+      logger.error('Error saving lift share:', error)
       alert('Failed to save lift share. Please try again.')
     }
   }
@@ -162,7 +163,7 @@ function LiftSharing({ onBackToMenu, rsvps = [] }) {
       setPassengerName('')
       setPassengerErrors({})
     } catch (error) {
-      console.error('Error saving passenger:', error)
+      logger.error('Error saving passenger:', error)
       alert('Failed to save passenger. Please try again.')
     }
   }
@@ -181,7 +182,7 @@ function LiftSharing({ onBackToMenu, rsvps = [] }) {
       setLiftShares(updated)
       await saveLiftShares(updated)
     } catch (error) {
-      console.error('Error removing passenger:', error)
+      logger.error('Error removing passenger:', error)
       alert('Failed to remove passenger. Please try again.')
     }
   }
@@ -196,7 +197,7 @@ function LiftSharing({ onBackToMenu, rsvps = [] }) {
       setLiftShares(updated)
       await saveLiftShares(updated)
     } catch (error) {
-      console.error('Error removing lift:', error)
+      logger.error('Error removing lift:', error)
       alert('Failed to remove lift. Please try again.')
     }
   }

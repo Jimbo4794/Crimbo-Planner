@@ -1,0 +1,11 @@
+[
+  { "id": "best-dressed", "label": "Best Dressed", "icon": "👔" },
+  { "id": "life-of-party", "label": "Life of the Party", "icon": "🎉" },
+  { "id": "best-dancer", "label": "Best Dancer", "icon": "💃" },
+  { "id": "funniest-person", "label": "Funniest Person", "icon": "😂" },
+  { "id": "most-helpful", "label": "Most Helpful", "icon": "🤝" },
+  { "id": "best-storyteller", "label": "Best Storyteller", "icon": "📖" },
+  { "id": "most-energetic", "label": "Most Energetic", "icon": "⚡" },
+  { "id": "best-singer", "label": "Best Singer", "icon": "🎤" }
+]
+

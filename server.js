@@ -1,17 +1,21 @@
 import express from 'express';
 import { createServer } from 'http';
 import { Server } from 'socket.io';
-import { readFileSync, writeFileSync, mkdirSync, existsSync, unlinkSync, openSync, closeSync } from 'fs';
+import { readFileSync, writeFileSync, mkdirSync, existsSync, unlinkSync, openSync, closeSync, copyFileSync, readdirSync, statSync } from 'fs';
 import { join, dirname } from 'path';
 import { fileURLToPath } from 'url';
 import cors from 'cors';
+import logger from './server-logger.js';
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = dirname(__filename);
 
 const PORT = process.env.PORT || (process.env.NODE_ENV === 'production' ? 80 : 3000);
 const DATA_DIR = process.env.DATA_DIR || join(__dirname, 'data');
+const BACKUP_DIR = process.env.BACKUP_DIR || join(DATA_DIR, 'backups');
 const ADMIN_PASSWORD = process.env.ADMIN_PASSWORD || 'admin123';
+const BACKUP_INTERVAL_HOURS = parseInt(process.env.BACKUP_INTERVAL_HOURS || '6', 10); // Default: every 6 hours
+const MAX_BACKUPS = parseInt(process.env.MAX_BACKUPS || '30', 10); // Default: keep 30 backups
 
 // Simple in-memory session store for admin authentication
 // In production, consider using proper session storage (Redis, database, etc.)
@@ -20,6 +24,12 @@ const adminSessions = new Set();
 // Ensure data directory exists
 if (!existsSync(DATA_DIR)) {
   mkdirSync(DATA_DIR, { recursive: true });
+}
+
+// Ensure backup directory exists
+if (!existsSync(BACKUP_DIR)) {
+  mkdirSync(BACKUP_DIR, { recursive: true });
+  logger.info(`Created backup directory: ${BACKUP_DIR}`);
 }
 
 // Configure CORS - Since frontend and backend are served from same origin (same domain/port),
@@ -110,7 +120,7 @@ const releaseLock = (lockPath) => {
       unlinkSync(lockPath);
     }
   } catch (error) {
-    console.error(`Error releasing lock ${lockPath}:`, error);
+    logger.error(`Error releasing lock ${lockPath}:`, error);
   }
 };
 
@@ -123,7 +133,7 @@ const readJSONFile = (filename) => {
       return JSON.parse(data);
     }
   } catch (error) {
-    console.error(`Error reading ${filename}:`, error);
+    logger.error(`Error reading ${filename}:`, error);
   }
   return null;
 };
@@ -154,7 +164,7 @@ const writeJSONFile = async (filename, data) => {
     writeFileSync(filePath, JSON.stringify(data, null, 2), 'utf8');
     return true;
   } catch (error) {
-    console.error(`Error writing ${filename}:`, error);
+    logger.error(`Error writing ${filename}:`, error);
     return false;
   } finally {
     releaseLock(lockPath);
@@ -178,12 +188,104 @@ const readModifyWriteJSONFile = async (filename, modifyFn) => {
     writeFileSync(filePath, JSON.stringify(newData, null, 2), 'utf8');
     return newData;
   } catch (error) {
-    console.error(`Error in read-modify-write for ${filename}:`, error);
+    logger.error(`Error in read-modify-write for ${filename}:`, error);
     throw error;
   } finally {
     releaseLock(lockPath);
   }
 };
+
+// Backup functions
+const createBackup = async (filename = 'rsvps.json') => {
+  try {
+    const sourcePath = join(DATA_DIR, filename);
+    
+    // Check if source file exists
+    if (!existsSync(sourcePath)) {
+      logger.warn(`Source file ${filename} does not exist, skipping backup`);
+      return null;
+    }
+    
+    // Create timestamp for backup filename
+    const timestamp = new Date().toISOString().replace(/[:.]/g, '-').replace('T', '_').split('.')[0];
+    const backupFilename = `${filename.replace('.json', '')}_backup_${timestamp}.json`;
+    const backupPath = join(BACKUP_DIR, backupFilename);
+    
+    // Copy file to backup directory
+    copyFileSync(sourcePath, backupPath);
+    
+    logger.info(`Created backup: ${backupFilename}`);
+    return backupPath;
+  } catch (error) {
+    logger.error(`Error creating backup for ${filename}:`, error);
+    return null;
+  }
+};
+
+const cleanupOldBackups = (filename = 'rsvps.json', maxBackups = MAX_BACKUPS) => {
+  try {
+    const prefix = filename.replace('.json', '') + '_backup_';
+    const files = readdirSync(BACKUP_DIR)
+      .filter(file => file.startsWith(prefix) && file.endsWith('.json'))
+      .map(file => {
+        const filePath = join(BACKUP_DIR, file);
+        return {
+          name: file,
+          path: filePath,
+          mtime: statSync(filePath).mtime
+        };
+      })
+      .sort((a, b) => b.mtime - a.mtime); // Sort by modification time, newest first
+    
+    // Remove old backups if we exceed the limit
+    if (files.length > maxBackups) {
+      const filesToDelete = files.slice(maxBackups);
+      filesToDelete.forEach(file => {
+        try {
+          unlinkSync(file.path);
+          logger.info(`Deleted old backup: ${file.name}`);
+        } catch (error) {
+          logger.error(`Error deleting backup ${file.name}:`, error);
+        }
+      });
+    }
+  } catch (error) {
+    logger.error('Error cleaning up old backups:', error);
+  }
+};
+
+// Scheduled backup task
+const scheduleBackups = () => {
+  const backupInterval = BACKUP_INTERVAL_HOURS * 60 * 60 * 1000; // Convert hours to milliseconds
+  
+  // Files to backup
+  const filesToBackup = ['rsvps.json', 'framies.json', 'liftshares.json', 'awards.json'];
+  
+  // Create initial backup on startup
+  logger.info('Creating initial backup...');
+  filesToBackup.forEach(filename => {
+    createBackup(filename).then(() => {
+      cleanupOldBackups(filename);
+    });
+  });
+  
+  // Schedule periodic backups
+  setInterval(() => {
+    logger.info('Running scheduled backup...');
+    filesToBackup.forEach(filename => {
+      createBackup(filename).then(() => {
+        cleanupOldBackups(filename);
+      });
+    });
+  }, backupInterval);
+  
+  logger.info(`Backup system initialized: backups will be created every ${BACKUP_INTERVAL_HOURS} hours`);
+  logger.info(`Maximum backups to keep: ${MAX_BACKUPS}`);
+  logger.info(`Files being backed up: ${filesToBackup.join(', ')}`);
+};
+
+// Start backup scheduler
+scheduleBackups();
 
 // API Routes
 
@@ -193,7 +295,7 @@ app.get('/api/rsvps', (req, res) => {
     const rsvps = readJSONFile('rsvps.json');
     res.json(rsvps || []);
   } catch (error) {
-    console.error('Error reading RSVPs:', error);
+    logger.error('Error reading RSVPs:', error);
     res.status(500).json({ error: 'Failed to read RSVPs' });
   }
 });
@@ -203,6 +305,12 @@ app.put('/api/rsvps', async (req, res) => {
     const { rsvps } = req.body;
     if (!Array.isArray(rsvps)) {
       return res.status(400).json({ error: 'RSVPs must be an array' });
+    }
+    
+    // Check if RSVPs are locked
+    const config = readJSONFile('config.json');
+    if (config && config.rsvpLocked) {
+      return res.status(403).json({ error: 'RSVPs are currently locked. Please contact the administrator.' });
     }
     
     // Atomic read-modify-write with lock held throughout
@@ -216,6 +324,21 @@ app.put('/api/rsvps', async (req, res) => {
         if (rsvp.table && rsvp.seat) {
           const seatKey = `${rsvp.table}-${rsvp.seat}`;
           seatMap.set(seatKey, rsvp);
+        }
+      }
+      
+      // Check if seating is locked and if any RSVP has seat changes
+      const seatingLocked = config && config.seatingLocked;
+      if (seatingLocked) {
+        // Check if any RSVP is trying to change or add a seat assignment
+        for (const rsvp of rsvps) {
+          if (rsvp.table && rsvp.seat) {
+            const existing = existingRsvps.find(r => r.email === rsvp.email);
+            // If this is a new seat assignment or a change to existing seat
+            if (!existing || existing.table !== rsvp.table || existing.seat !== rsvp.seat) {
+              throw new Error('Seating plan is currently locked. Seat changes are not allowed.');
+            }
+          }
         }
       }
       
@@ -240,12 +363,12 @@ app.put('/api/rsvps', async (req, res) => {
     });
     
     // Emit real-time update to all connected clients
-    console.log(`Emitting rsvps:updated to ${io.sockets.sockets.size} connected clients`);
+    logger.info(`Emitting rsvps:updated to ${io.sockets.sockets.size} connected clients`);
     io.emit('rsvps:updated', savedRsvps);
     
     res.json({ success: true, rsvps: savedRsvps });
   } catch (error) {
-    console.error('Error saving RSVPs:', error);
+    logger.error('Error saving RSVPs:', error);
     if (error.message.includes('lock')) {
       res.status(503).json({ error: 'Server is busy processing another request. Please try again in a moment.' });
     } else if (error.message.includes('Seat conflict')) {
@@ -283,13 +406,13 @@ app.get('/api/menu', (req, res) => {
     // If we had to normalize, save it back in the correct format
     if (normalizedMenu && normalizedMenu !== menu && Array.isArray(normalizedMenu)) {
       writeJSONFile('menu.json', normalizedMenu).catch(err => {
-        console.error('Error saving normalized menu:', err);
+        logger.error('Error saving normalized menu:', err);
       });
     }
     
     res.json(normalizedMenu || null);
   } catch (error) {
-    console.error('Error reading menu:', error);
+    logger.error('Error reading menu:', error);
     res.status(500).json({ error: 'Failed to read menu' });
   }
 });
@@ -311,7 +434,7 @@ app.put('/api/menu', async (req, res) => {
     
     res.json({ success: true, menuCategories: savedMenu });
   } catch (error) {
-    console.error('Error saving menu:', error);
+    logger.error('Error saving menu:', error);
     if (error.message.includes('lock')) {
       res.status(503).json({ error: 'Server is busy processing another request. Please try again in a moment.' });
     } else {
@@ -326,7 +449,7 @@ app.get('/api/liftshares', (req, res) => {
     const liftShares = readJSONFile('liftshares.json');
     res.json(liftShares || []);
   } catch (error) {
-    console.error('Error reading lift shares:', error);
+    logger.error('Error reading lift shares:', error);
     res.status(500).json({ error: 'Failed to read lift shares' });
   }
 });
@@ -348,7 +471,7 @@ app.put('/api/liftshares', async (req, res) => {
     
     res.json({ success: true, liftShares: savedLiftShares });
   } catch (error) {
-    console.error('Error saving lift shares:', error);
+    logger.error('Error saving lift shares:', error);
     if (error.message.includes('lock')) {
       res.status(503).json({ error: 'Server is busy processing another request. Please try again in a moment.' });
     } else {
@@ -363,7 +486,7 @@ app.get('/api/event', (req, res) => {
     const eventDetails = readJSONFile('event.json');
     res.json(eventDetails || null);
   } catch (error) {
-    console.error('Error reading event details:', error);
+    logger.error('Error reading event details:', error);
     res.status(500).json({ error: 'Failed to read event details' });
   }
 });
@@ -385,7 +508,7 @@ app.put('/api/event', async (req, res) => {
     
     res.json({ success: true, eventDetails: savedEventDetails });
   } catch (error) {
-    console.error('Error saving event details:', error);
+    logger.error('Error saving event details:', error);
     if (error.message.includes('lock')) {
       res.status(503).json({ error: 'Server is busy processing another request. Please try again in a moment.' });
     } else {
@@ -400,7 +523,7 @@ app.get('/api/feedback', (req, res) => {
     const feedback = readJSONFile('feedback.json');
     res.json(feedback || []);
   } catch (error) {
-    console.error('Error reading feedback:', error);
+    logger.error('Error reading feedback:', error);
     res.status(500).json({ error: 'Failed to read feedback' });
   }
 });
@@ -423,7 +546,7 @@ app.post('/api/feedback', async (req, res) => {
     
     res.json({ success: true, feedback: newFeedback });
   } catch (error) {
-    console.error('Error saving feedback:', error);
+    logger.error('Error saving feedback:', error);
     if (error.message.includes('lock')) {
       res.status(503).json({ error: 'Server is busy processing another request. Please try again in a moment.' });
     } else {
@@ -447,11 +570,92 @@ app.delete('/api/feedback/:id', async (req, res) => {
     
     res.json({ success: true, feedback: updatedFeedback });
   } catch (error) {
-    console.error('Error deleting feedback:', error);
+    logger.error('Error deleting feedback:', error);
     if (error.message.includes('lock')) {
       res.status(503).json({ error: 'Server is busy processing another request. Please try again in a moment.' });
     } else {
       res.status(500).json({ error: 'Failed to delete feedback' });
+    }
+  }
+});
+
+// Framies endpoints
+app.get('/api/framies', (req, res) => {
+  try {
+    const framiesData = readJSONFile('framies.json');
+    res.json(framiesData || { nominations: [], votes: [] });
+  } catch (error) {
+    logger.error('Error reading framies data:', error);
+    res.status(500).json({ error: 'Failed to read framies data' });
+  }
+});
+
+app.put('/api/framies', async (req, res) => {
+  try {
+    const { framiesData } = req.body;
+    if (!framiesData || typeof framiesData !== 'object') {
+      return res.status(400).json({ error: 'Framies data must be an object' });
+    }
+    
+    // Atomic read-modify-write with lock held throughout
+    const savedFramies = await readModifyWriteJSONFile('framies.json', () => {
+      return framiesData;
+    });
+    
+    // Emit real-time update to all connected clients
+    io.emit('framies:updated', savedFramies);
+    
+    res.json({ success: true, framiesData: savedFramies });
+  } catch (error) {
+    logger.error('Error saving framies data:', error);
+    if (error.message.includes('lock')) {
+      res.status(503).json({ error: 'Server is busy processing another request. Please try again in a moment.' });
+    } else {
+      res.status(500).json({ error: 'Failed to save framies data' });
+    }
+  }
+});
+
+// Awards endpoints
+app.get('/api/awards', (req, res) => {
+  try {
+    const awards = readJSONFile('awards.json');
+    res.json(awards || []);
+  } catch (error) {
+    logger.error('Error reading awards:', error);
+    res.status(500).json({ error: 'Failed to read awards' });
+  }
+});
+
+app.put('/api/awards', async (req, res) => {
+  try {
+    const { awards } = req.body;
+    if (!Array.isArray(awards)) {
+      return res.status(400).json({ error: 'Awards must be an array' });
+    }
+    
+    // Validate award structure
+    for (const award of awards) {
+      if (!award.id || !award.label) {
+        return res.status(400).json({ error: 'Each award must have id and label' });
+      }
+    }
+    
+    // Atomic read-modify-write with lock held throughout
+    const savedAwards = await readModifyWriteJSONFile('awards.json', () => {
+      return awards;
+    });
+    
+    // Emit real-time update to all connected clients
+    io.emit('awards:updated', savedAwards);
+    
+    res.json({ success: true, awards: savedAwards });
+  } catch (error) {
+    logger.error('Error saving awards:', error);
+    if (error.message.includes('lock')) {
+      res.status(503).json({ error: 'Server is busy processing another request. Please try again in a moment.' });
+    } else {
+      res.status(500).json({ error: 'Failed to save awards' });
     }
   }
 });
@@ -462,14 +666,14 @@ app.get('/api/config', (req, res) => {
     const config = readJSONFile('config.json');
     res.json(config || { tablesCount: 5, seatsPerTable: 8 });
   } catch (error) {
-    console.error('Error reading config:', error);
+    logger.error('Error reading config:', error);
     res.status(500).json({ error: 'Failed to read config' });
   }
 });
 
 app.put('/api/config', async (req, res) => {
   try {
-    const { tablesCount, seatsPerTable, tablePositions, customAreas, gridCols, gridRows, tableDisplayNames } = req.body;
+    const { tablesCount, seatsPerTable, tablePositions, customAreas, gridCols, gridRows, tableDisplayNames, rsvpLocked, seatingLocked } = req.body;
     const config = {
       tablesCount: tablesCount || 5,
       seatsPerTable: seatsPerTable || 8
@@ -500,6 +704,15 @@ app.put('/api/config', async (req, res) => {
       config.tableDisplayNames = tableDisplayNames;
     }
     
+    // Include lock states if provided
+    if (rsvpLocked !== undefined) {
+      config.rsvpLocked = rsvpLocked;
+    }
+    
+    if (seatingLocked !== undefined) {
+      config.seatingLocked = seatingLocked;
+    }
+    
     // Atomic read-modify-write with lock held throughout
     const savedConfig = await readModifyWriteJSONFile('config.json', (currentConfig) => {
       // Merge with existing config to preserve any other fields
@@ -512,7 +725,7 @@ app.put('/api/config', async (req, res) => {
     
     res.json({ success: true, ...savedConfig });
   } catch (error) {
-    console.error('Error saving config:', error);
+    logger.error('Error saving config:', error);
     if (error.message.includes('lock')) {
       res.status(503).json({ error: 'Server is busy processing another request. Please try again in a moment.' });
     } else {
@@ -553,7 +766,7 @@ app.post('/api/admin/login', (req, res) => {
       res.status(401).json({ error: 'Incorrect password' });
     }
   } catch (error) {
-    console.error('Error in admin login:', error);
+    logger.error('Error in admin login:', error);
     res.status(500).json({ error: 'Failed to process login' });
   }
 });
@@ -567,7 +780,7 @@ app.post('/api/admin/logout', (req, res) => {
     }
     res.json({ success: true });
   } catch (error) {
-    console.error('Error in admin logout:', error);
+    logger.error('Error in admin logout:', error);
     res.status(500).json({ error: 'Failed to logout' });
   }
 });
@@ -575,6 +788,35 @@ app.post('/api/admin/logout', (req, res) => {
 // Admin session check endpoint
 app.get('/api/admin/check', requireAdmin, (req, res) => {
   res.json({ success: true, authenticated: true });
+});
+
+// Admin manual backup endpoint
+app.post('/api/admin/backup', requireAdmin, async (req, res) => {
+  try {
+    const filesToBackup = ['rsvps.json', 'framies.json', 'liftshares.json', 'awards.json'];
+    const backupPaths = [];
+    
+    for (const filename of filesToBackup) {
+      const backupPath = await createBackup(filename);
+      if (backupPath) {
+        cleanupOldBackups(filename);
+        backupPaths.push({ file: filename, path: backupPath });
+      }
+    }
+    
+    if (backupPaths.length > 0) {
+      res.json({ 
+        success: true, 
+        message: 'Backups created successfully', 
+        backups: backupPaths 
+      });
+    } else {
+      res.status(500).json({ error: 'Failed to create backups' });
+    }
+  } catch (error) {
+    logger.error('Error in manual backup:', error);
+    res.status(500).json({ error: 'Failed to create backup' });
+  }
 });
 
 // Catch all handler for SPA routing (only in production)
@@ -586,10 +828,10 @@ if (existsSync(distPath)) {
 
 // Socket.io connection handling
 io.on('connection', (socket) => {
-  console.log(`✅ Client connected: ${socket.id} (Total clients: ${io.sockets.sockets.size})`);
+  logger.info(`Client connected: ${socket.id} (Total clients: ${io.sockets.sockets.size})`);
   
   socket.on('disconnect', (reason) => {
-    console.log(`❌ Client disconnected: ${socket.id}, reason: ${reason} (Total clients: ${io.sockets.sockets.size})`);
+    logger.info(`Client disconnected: ${socket.id}, reason: ${reason} (Total clients: ${io.sockets.sockets.size})`);
   });
   
   // Send a test message on connection
@@ -597,8 +839,8 @@ io.on('connection', (socket) => {
 });
 
 httpServer.listen(PORT, () => {
-  console.log(`Server running on port ${PORT}`);
-  console.log(`Data directory: ${DATA_DIR}`);
-  console.log(`WebSocket server ready for real-time updates`);
+  logger.info(`Server running on port ${PORT}`);
+  logger.info(`Data directory: ${DATA_DIR}`);
+  logger.info(`WebSocket server ready for real-time updates`);
 });
 

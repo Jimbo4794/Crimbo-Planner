@@ -63,6 +63,17 @@ function MainMenu({ onNavigate }) {
         </button>
 
         <button 
+          onClick={() => onNavigate('framies')} 
+          className="menu-option"
+        >
+          <div className="menu-icon">🏆</div>
+          <div className="menu-content">
+            <h3>Framies!</h3>
+            <p>Nominate and vote for your favorite people in award categories</p>
+          </div>
+        </button>
+
+        <button 
           onClick={() => onNavigate('admin')} 
           className="menu-option"
         >

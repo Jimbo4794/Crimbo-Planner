@@ -2,9 +2,10 @@ import { useState, useEffect } from 'react'
 import './Admin.css'
 import ImageCropper from './ImageCropper'
 import { AVAILABLE_ICONS, MAX_IMAGE_SIZE } from '../utils/constants'
-import { saveEventDetails, fetchFeedback, deleteFeedback, adminLogin, adminLogout, checkAdminSession } from '../api'
+import { saveEventDetails, fetchFeedback, deleteFeedback, adminLogin, adminLogout, checkAdminSession, createManualBackup, fetchAwards, saveAwards } from '../api'
+import logger from '../utils/logger'
 
-function Admin({ rsvps, menuCategories, tablesCount, seatsPerTable, tablePositions, customAreas, gridCols, gridRows, eventDetails, onUpdateRSVPs, onUpdateMenuCategories, onUpdateTablesCount, onUpdateSeatsPerTable, onUpdateTablePositions, onUpdateCustomAreas, onUpdateGridCols, onUpdateGridRows, onUpdateEventDetails, onBackToMenu }) {
+function Admin({ rsvps, menuCategories, tablesCount, seatsPerTable, tablePositions, customAreas, gridCols, gridRows, eventDetails, rsvpLocked, seatingLocked, onUpdateRSVPs, onUpdateMenuCategories, onUpdateTablesCount, onUpdateSeatsPerTable, onUpdateTablePositions, onUpdateCustomAreas, onUpdateGridCols, onUpdateGridRows, onUpdateEventDetails, onUpdateRsvpLocked, onUpdateSeatingLocked, onBackToMenu }) {
   // Helper function to get menu option label by ID
   const getMenuOptionLabel = (menuId) => {
     for (const category of menuCategories) {
@@ -16,7 +17,7 @@ function Admin({ rsvps, menuCategories, tablesCount, seatsPerTable, tablePositio
   const [isAuthenticated, setIsAuthenticated] = useState(false)
   const [password, setPassword] = useState('')
   const [passwordError, setPasswordError] = useState('')
-  const [activeTab, setActiveTab] = useState('users') // 'users', 'menu', 'seating', 'arrangement', 'event', 'feedback', or 'storage'
+  const [activeTab, setActiveTab] = useState('users') // 'users', 'menu', 'seating', 'arrangement', 'event', 'feedback', 'awards', or 'storage'
   const [editingRSVP, setEditingRSVP] = useState(null)
   const [editingMenu, setEditingMenu] = useState(false)
   const [eventDetailsForm, setEventDetailsForm] = useState({
@@ -84,7 +85,7 @@ function Admin({ rsvps, menuCategories, tablesCount, seatsPerTable, tablePositio
       try {
         await adminLogout(adminSessionId)
       } catch (error) {
-        console.error('Error logging out:', error)
+        logger.error('Error logging out:', error)
       }
     }
     setAdminSessionId(null)
@@ -116,7 +117,7 @@ function Admin({ rsvps, menuCategories, tablesCount, seatsPerTable, tablePositio
       const data = await fetchFeedback()
       setFeedbackList(data || [])
     } catch (error) {
-      console.error('Error loading feedback:', error)
+      logger.error('Error loading feedback:', error)
     } finally {
       setLoadingFeedback(false)
     }
@@ -132,7 +133,7 @@ function Admin({ rsvps, menuCategories, tablesCount, seatsPerTable, tablePositio
       const updatedFeedback = feedbackList.filter(f => f.id !== feedbackId)
       setFeedbackList(updatedFeedback)
     } catch (error) {
-      console.error('Error deleting feedback:', error)
+      logger.error('Error deleting feedback:', error)
       alert('Failed to delete feedback. Please try again.')
     }
   }
@@ -158,7 +159,7 @@ function Admin({ rsvps, menuCategories, tablesCount, seatsPerTable, tablePositio
       setEventDetailsMessage({ type: 'success', text: 'Event details saved successfully!' })
       setTimeout(() => setEventDetailsMessage(null), 3000)
     } catch (error) {
-      console.error('Error saving event details:', error)
+      logger.error('Error saving event details:', error)
       setEventDetailsMessage({ type: 'error', text: 'Failed to save event details. Please try again.' })
     } finally {
       setSavingEventDetails(false)
@@ -398,6 +399,12 @@ function Admin({ rsvps, menuCategories, tablesCount, seatsPerTable, tablePositio
           Feedback ({feedbackList.length})
         </button>
         <button
+          className={`tab-button ${activeTab === 'awards' ? 'active' : ''}`}
+          onClick={() => setActiveTab('awards')}
+        >
+          Awards
+        </button>
+        <button
           className={`tab-button ${activeTab === 'storage' ? 'active' : ''}`}
           onClick={() => setActiveTab('storage')}
         >
@@ -414,6 +421,44 @@ function Admin({ rsvps, menuCategories, tablesCount, seatsPerTable, tablePositio
                 📥 Export to CSV
               </button>
             </div>
+            
+            <div className="lock-controls">
+              <h4>Lock Controls</h4>
+              <div className="lock-controls-row">
+                <div className="lock-control-item">
+                  <label htmlFor="rsvp-lock">
+                    Lock RSVP Submissions:
+                  </label>
+                  <input
+                    type="checkbox"
+                    id="rsvp-lock"
+                    checked={rsvpLocked}
+                    onChange={(e) => onUpdateRsvpLocked(e.target.checked)}
+                  />
+                  <span className={`lock-status ${rsvpLocked ? 'locked' : 'unlocked'}`}>
+                    {rsvpLocked ? '🔒 Locked' : '🔓 Unlocked'}
+                  </span>
+                </div>
+                <div className="lock-control-item">
+                  <label htmlFor="seating-lock">
+                    Lock Seating Plan:
+                  </label>
+                  <input
+                    type="checkbox"
+                    id="seating-lock"
+                    checked={seatingLocked}
+                    onChange={(e) => onUpdateSeatingLocked(e.target.checked)}
+                  />
+                  <span className={`lock-status ${seatingLocked ? 'locked' : 'unlocked'}`}>
+                    {seatingLocked ? '🔒 Locked' : '🔓 Unlocked'}
+                  </span>
+                </div>
+              </div>
+              <p className="lock-controls-description">
+                When RSVP submissions are locked, users cannot submit new RSVPs. When the seating plan is locked, users cannot change their seat assignments.
+              </p>
+            </div>
+            
             {rsvps.length === 0 ? (
               <p className="no-data">No RSVPs yet</p>
             ) : (
@@ -878,6 +923,9 @@ function Admin({ rsvps, menuCategories, tablesCount, seatsPerTable, tablePositio
             )}
           </div>
         )}
+        {activeTab === 'awards' && (
+          <AwardManagement />
+        )}
         {activeTab === 'storage' && (
           <StorageManagement
             rsvps={rsvps}
@@ -888,6 +936,7 @@ function Admin({ rsvps, menuCategories, tablesCount, seatsPerTable, tablePositio
             onUpdateMenuCategories={onUpdateMenuCategories}
             onUpdateTablesCount={onUpdateTablesCount}
             onUpdateSeatsPerTable={onUpdateSeatsPerTable}
+            adminSessionId={adminSessionId}
           />
         )}
       </div>
@@ -1168,9 +1217,11 @@ function SeatingConfiguration({ tablesCount, seatsPerTable, onUpdateTablesCount,
   )
 }
 
-function StorageManagement({ rsvps, menuCategories, tablesCount, seatsPerTable, onUpdateRSVPs, onUpdateMenuCategories, onUpdateTablesCount, onUpdateSeatsPerTable }) {
+function StorageManagement({ rsvps, menuCategories, tablesCount, seatsPerTable, onUpdateRSVPs, onUpdateMenuCategories, onUpdateTablesCount, onUpdateSeatsPerTable, adminSessionId }) {
   const [importError, setImportError] = useState('')
   const [importSuccess, setImportSuccess] = useState('')
+  const [backupMessage, setBackupMessage] = useState(null)
+  const [backupLoading, setBackupLoading] = useState(false)
 
   const handleExportData = () => {
     const exportData = {
@@ -1192,6 +1243,42 @@ function StorageManagement({ rsvps, menuCategories, tablesCount, seatsPerTable, 
     link.click()
     document.body.removeChild(link)
     URL.revokeObjectURL(url)
+  }
+
+  const handleManualBackup = async () => {
+    if (!adminSessionId) {
+      setBackupMessage({ type: 'error', text: 'Admin session required. Please log in again.' })
+      setTimeout(() => setBackupMessage(null), 5000)
+      return
+    }
+
+    try {
+      setBackupLoading(true)
+      setBackupMessage(null)
+      const result = await createManualBackup(adminSessionId)
+      
+      if (result.success) {
+        const backupFiles = result.backups || []
+        const fileList = backupFiles.map(b => b.file).join(', ')
+        setBackupMessage({ 
+          type: 'success', 
+          text: `Backup created successfully! Files backed up: ${fileList}` 
+        })
+      } else {
+        setBackupMessage({ type: 'error', text: 'Failed to create backup' })
+      }
+      
+      setTimeout(() => setBackupMessage(null), 5000)
+    } catch (error) {
+      logger.error('Error creating manual backup:', error)
+      setBackupMessage({ 
+        type: 'error', 
+        text: error.message || 'Failed to create backup. Please try again.' 
+      })
+      setTimeout(() => setBackupMessage(null), 5000)
+    } finally {
+      setBackupLoading(false)
+    }
   }
 
   const handleImportData = (e) => {
@@ -1247,7 +1334,7 @@ function StorageManagement({ rsvps, menuCategories, tablesCount, seatsPerTable, 
         // Clear success message after 3 seconds
         setTimeout(() => setImportSuccess(''), 3000)
       } catch (error) {
-        console.error('Import error:', error)
+        logger.error('Import error:', error)
         setImportError(`Failed to import data: ${error.message}`)
         e.target.value = '' // Reset file input
       }
@@ -1259,31 +1346,6 @@ function StorageManagement({ rsvps, menuCategories, tablesCount, seatsPerTable, 
     }
 
     reader.readAsText(file)
-  }
-
-  const handleClearAllData = () => {
-    const confirmMessage = `⚠️ WARNING: This will permanently delete ALL data:\n\n` +
-      `- All RSVPs (${rsvps.length})\n` +
-      `- All menu categories\n` +
-      `- Seating configuration\n\n` +
-      `This action cannot be undone!\n\n` +
-      `Are you absolutely sure?`
-
-    if (!window.confirm(confirmMessage)) {
-      return
-    }
-
-    // Double confirmation
-    if (!window.confirm('This is your last chance. Delete ALL data?')) {
-      return
-    }
-
-    onUpdateRSVPs([])
-    // Reset to defaults (you may want to add default menu categories)
-    onUpdateTablesCount(5)
-    onUpdateSeatsPerTable(8)
-    
-    alert('All data has been cleared.')
   }
 
   const getStorageInfo = () => {
@@ -1324,6 +1386,25 @@ function StorageManagement({ rsvps, menuCategories, tablesCount, seatsPerTable, 
 
       <div className="storage-actions">
         <div className="storage-action-group">
+          <h4>Server Backup</h4>
+          <p className="action-description">
+            Create a server-side backup of all data files (RSVPs, Framies, Lift Shares). Backups are stored on the server and are automatically created every 6 hours.
+          </p>
+          <button 
+            onClick={handleManualBackup} 
+            className="backup-button"
+            disabled={backupLoading}
+          >
+            {backupLoading ? '⏳ Creating Backup...' : '💾 Create Manual Backup'}
+          </button>
+          {backupMessage && (
+            <div className={`backup-message ${backupMessage.type === 'success' ? 'success-message' : 'error-message'}`}>
+              {backupMessage.text}
+            </div>
+          )}
+        </div>
+
+        <div className="storage-action-group">
           <h4>Export Data</h4>
           <p className="action-description">
             Export all data (RSVPs, menu, seating configuration) to a JSON file that can be saved anywhere on your computer.
@@ -1351,16 +1432,221 @@ function StorageManagement({ rsvps, menuCategories, tablesCount, seatsPerTable, 
           {importError && <div className="error-message">{importError}</div>}
           {importSuccess && <div className="success-message">{importSuccess}</div>}
         </div>
+      </div>
+    </div>
+  )
+}
 
-        <div className="storage-action-group">
-          <h4>Clear All Data</h4>
-          <p className="action-description">
-            Permanently delete all data. This cannot be undone!
-          </p>
-          <button onClick={handleClearAllData} className="clear-data-button">
-            🗑️ Clear All Data
+function AwardManagement() {
+  const [awards, setAwards] = useState([])
+  const [loading, setLoading] = useState(true)
+  const [editingAward, setEditingAward] = useState(null)
+  const [newAwardName, setNewAwardName] = useState('')
+  const [message, setMessage] = useState(null)
+  const [saving, setSaving] = useState(false)
+
+  // Generate UUID v4
+  const generateUUID = () => {
+    return crypto.randomUUID()
+  }
+
+  useEffect(() => {
+    loadAwards()
+  }, [])
+
+  const loadAwards = async () => {
+    try {
+      setLoading(true)
+      const awardsData = await fetchAwards()
+      setAwards(awardsData || [])
+    } catch (error) {
+      logger.error('Error loading awards:', error)
+      setMessage({ type: 'error', text: 'Failed to load awards' })
+      setTimeout(() => setMessage(null), 5000)
+    } finally {
+      setLoading(false)
+    }
+  }
+
+  const handleSaveAwards = async (updatedAwards) => {
+    try {
+      setSaving(true)
+      setMessage(null)
+      await saveAwards(updatedAwards)
+      setAwards(updatedAwards)
+      setMessage({ type: 'success', text: 'Awards saved successfully!' })
+      setTimeout(() => setMessage(null), 3000)
+    } catch (error) {
+      logger.error('Error saving awards:', error)
+      setMessage({ type: 'error', text: error.message || 'Failed to save awards' })
+      setTimeout(() => setMessage(null), 5000)
+    } finally {
+      setSaving(false)
+    }
+  }
+
+  const handleAddAward = () => {
+    if (!newAwardName.trim()) {
+      setMessage({ type: 'error', text: 'Please enter an award name' })
+      setTimeout(() => setMessage(null), 3000)
+      return
+    }
+
+    const updatedAwards = [...awards, {
+      id: generateUUID(),
+      label: newAwardName.trim()
+    }]
+    
+    handleSaveAwards(updatedAwards)
+    setNewAwardName('')
+  }
+
+  const handleEditAward = (award) => {
+    setEditingAward({ ...award })
+  }
+
+  const handleUpdateAward = () => {
+    if (!editingAward.label.trim()) {
+      setMessage({ type: 'error', text: 'Please enter an award name' })
+      setTimeout(() => setMessage(null), 3000)
+      return
+    }
+
+    const updatedAwards = awards.map(a => 
+      a.id === editingAward.id ? { id: editingAward.id, label: editingAward.label.trim() } : a
+    )
+    
+    handleSaveAwards(updatedAwards)
+    setEditingAward(null)
+  }
+
+  const handleDeleteAward = (awardId) => {
+    if (!window.confirm(`Are you sure you want to delete the award "${awards.find(a => a.id === awardId)?.label}"?`)) {
+      return
+    }
+
+    const updatedAwards = awards.filter(a => a.id !== awardId)
+    handleSaveAwards(updatedAwards)
+  }
+
+  const handleMoveAward = (index, direction) => {
+    const newIndex = index + direction
+    if (newIndex < 0 || newIndex >= awards.length) return
+
+    const updatedAwards = [...awards]
+    const [moved] = updatedAwards.splice(index, 1)
+    updatedAwards.splice(newIndex, 0, moved)
+    handleSaveAwards(updatedAwards)
+  }
+
+  if (loading) {
+    return <div className="award-management-section">Loading awards...</div>
+  }
+
+  return (
+    <div className="award-management-section">
+      <h3>Award Category Management</h3>
+      <p className="section-description">
+        Manage the award categories that appear on the Framies page. Users can nominate and vote for people in these categories.
+      </p>
+
+      {message && (
+        <div className={`award-message ${message.type === 'success' ? 'success-message' : 'error-message'}`}>
+          {message.text}
+        </div>
+      )}
+
+      <div className="award-form-section">
+        <h4>Add New Award</h4>
+        <div className="award-form-row">
+          <div className="form-group">
+            <label htmlFor="new-award-name">Award Name *</label>
+            <input
+              id="new-award-name"
+              type="text"
+              value={newAwardName}
+              onChange={(e) => setNewAwardName(e.target.value)}
+              placeholder="e.g., Best Dancer"
+              onKeyPress={(e) => {
+                if (e.key === 'Enter') {
+                  handleAddAward()
+                }
+              }}
+            />
+          </div>
+          <button onClick={handleAddAward} className="add-award-button" disabled={saving}>
+            ➕ Add Award
           </button>
         </div>
+      </div>
+
+      <div className="awards-list-section">
+        <h4>Current Awards ({awards.length})</h4>
+        {awards.length === 0 ? (
+          <p className="no-awards">No awards configured. Add your first award above.</p>
+        ) : (
+          <div className="awards-list">
+            {awards.map((award, index) => (
+              <div key={award.id} className="award-item">
+                {editingAward && editingAward.id === award.id ? (
+                  <div className="award-edit-form">
+                    <div className="form-group">
+                      <label>Award Name</label>
+                      <input
+                        type="text"
+                        value={editingAward.label}
+                        onChange={(e) => setEditingAward({ ...editingAward, label: e.target.value })}
+                        onKeyPress={(e) => {
+                          if (e.key === 'Enter') {
+                            handleUpdateAward()
+                          }
+                        }}
+                      />
+                    </div>
+                    <div className="award-edit-actions">
+                      <button onClick={handleUpdateAward} className="save-button" disabled={saving}>
+                        💾 Save
+                      </button>
+                      <button onClick={() => setEditingAward(null)} className="cancel-button">
+                        ✖️ Cancel
+                      </button>
+                    </div>
+                  </div>
+                ) : (
+                  <>
+                    <div className="award-display">
+                      <span className="award-label-display">{award.label}</span>
+                    </div>
+                    <div className="award-actions">
+                      <button
+                        onClick={() => handleMoveAward(index, -1)}
+                        disabled={index === 0}
+                        className="move-button"
+                        title="Move up"
+                      >
+                        ⬆️
+                      </button>
+                      <button
+                        onClick={() => handleMoveAward(index, 1)}
+                        disabled={index === awards.length - 1}
+                        className="move-button"
+                        title="Move down"
+                      >
+                        ⬇️
+                      </button>
+                      <button onClick={() => handleEditAward(award)} className="edit-button">
+                        ✏️ Edit
+                      </button>
+                      <button onClick={() => handleDeleteAward(award.id)} className="delete-button">
+                        🗑️ Delete
+                      </button>
+                    </div>
+                  </>
+                )}
+              </div>
+            ))}
+          </div>
+        )}
       </div>
     </div>
   )

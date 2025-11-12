@@ -3,8 +3,9 @@ import { createPortal } from 'react-dom'
 import './SeatSelection.css'
 import { conflictsWithDietaryPreferences } from '../utils/dietaryConflicts'
 import { AUTO_SIGNIN_TIMEOUT } from '../utils/constants'
+import logger from '../utils/logger'
 
-function SeatSelection({ rsvps, pendingRSVPId = null, onPendingRSVPProcessed = null, tablesCount = 5, seatsPerTable = 8, tablePositions = null, customAreas = null, gridCols = 12, gridRows = 8, tableDisplayNames = null, onSeatSelect, onChangeSeat, onUpdateMenuChoices, onUpdateDietaryRequirements, onUpdateDietaryPreferences, onBackToMenu, onNavigate, menuCategories = [] }) {
+function SeatSelection({ rsvps, pendingRSVPId = null, onPendingRSVPProcessed = null, tablesCount = 5, seatsPerTable = 8, tablePositions = null, customAreas = null, gridCols = 12, gridRows = 8, tableDisplayNames = null, seatingLocked = false, onSeatSelect, onChangeSeat, onUpdateMenuChoices, onUpdateDietaryRequirements, onUpdateDietaryPreferences, onBackToMenu, onNavigate, menuCategories = [] }) {
   const [lookupEmail, setLookupEmail] = useState('')
   const [lookupError, setLookupError] = useState('')
   const [foundRSVP, setFoundRSVP] = useState(null)
@@ -74,7 +75,7 @@ function SeatSelection({ rsvps, pendingRSVPId = null, onPendingRSVPProcessed = n
     // 3. User hasn't already signed in
     // 4. User hasn't explicitly signed out
     if (pendingRSVPId && latestRSVP && latestRSVP.id === pendingRSVPId && !foundRSVP && !explicitlySignedOut) {
-      console.log('🔐 Auto-signing in user for locally created RSVP:', latestRSVP.email)
+      logger.debug('Auto-signing in user for locally created RSVP:', latestRSVP.email)
       setFoundRSVP(latestRSVP)
       // Clear the pending RSVP ID after processing
       if (onPendingRSVPProcessed) {
@@ -90,9 +91,9 @@ function SeatSelection({ rsvps, pendingRSVPId = null, onPendingRSVPProcessed = n
 
   // Debug: Log when rsvps prop changes
   useEffect(() => {
-    console.log('🪑 SeatSelection: rsvps prop updated', rsvps.length, 'RSVPs')
+    logger.debug('SeatSelection: rsvps prop updated', rsvps.length, 'RSVPs')
     const seatsWithAssignments = rsvps.filter(r => r.table && r.seat).length
-    console.log('🪑 SeatSelection: RSVPs with seat assignments:', seatsWithAssignments)
+    logger.debug('SeatSelection: RSVPs with seat assignments:', seatsWithAssignments)
   }, [rsvps])
 
   // Create a map of occupied seats
@@ -106,11 +107,17 @@ function SeatSelection({ rsvps, pendingRSVPId = null, onPendingRSVPProcessed = n
         seats[key] = rsvp
       }
     })
-    console.log('🪑 SeatSelection: Recalculated occupiedSeats, count:', Object.keys(seats).length)
+    logger.debug('SeatSelection: Recalculated occupiedSeats, count:', Object.keys(seats).length)
     return seats
   }, [rsvps])
 
   const handleSeatClick = (tableNumber, seatNumber) => {
+    // Check if seating is locked
+    if (seatingLocked) {
+      alert('The seating plan is currently locked. Seat changes are not allowed. Please contact the administrator if you need assistance.')
+      return
+    }
+    
     // Only allow seat selection if user is signed in
     if (!isSignedIn) {
       setShowLookupDialog(true)
@@ -635,7 +642,23 @@ function SeatSelection({ rsvps, pendingRSVPId = null, onPendingRSVPProcessed = n
   return (
     <>
       <div className="seat-selection-container">
-
+      {seatingLocked && (
+        <div style={{
+          background: '#fff3cd',
+          border: '1px solid #ffc107',
+          borderRadius: '8px',
+          padding: '0.75rem 1rem',
+          marginBottom: '1rem',
+          color: '#856404',
+          display: 'flex',
+          alignItems: 'center',
+          gap: '0.5rem',
+          fontSize: '0.9rem'
+        }}>
+          <span style={{ fontSize: '1.2rem' }}>🔒</span>
+          <strong>The seating plan is currently locked. Seat changes are not allowed.</strong>
+        </div>
+      )}
       <div className="seat-selection-header">
         <div className="header-actions">
           <button 

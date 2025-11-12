@@ -1,6 +1,7 @@
 import { useState } from 'react'
 import './Feedback.css'
 import { saveFeedback } from '../api'
+import logger from '../utils/logger'
 
 function Feedback({ onBackToMenu }) {
   const [name, setName] = useState('')
@@ -44,7 +45,7 @@ function Feedback({ onBackToMenu }) {
         setSubmitMessage(null)
       }, 5000)
     } catch (error) {
-      console.error('Error submitting feedback:', error)
+      logger.error('Error submitting feedback:', error)
       setSubmitMessage({ type: 'error', text: 'Failed to submit feedback. Please try again.' })
     } finally {
       setSubmitting(false)

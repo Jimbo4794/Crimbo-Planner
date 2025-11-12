@@ -115,5 +115,7 @@
   "gridCols": 4,
   "gridRows": 9,
   "tableDisplayNames": null,
-  "_version": 3886
+  "_version": 3886,
+  "rsvpLocked": false,
+  "seatingLocked": false
 }
