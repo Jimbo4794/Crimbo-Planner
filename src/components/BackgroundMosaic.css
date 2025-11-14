@@ -1,0 +1,98 @@
+.background-mosaic {
+  position: fixed;
+  top: 0;
+  left: 0;
+  width: 100vw;
+  height: 100vh;
+  z-index: -1;
+  display: grid;
+  overflow: hidden;
+  opacity: 0.8;
+  filter: blur(1px);
+  pointer-events: none;
+  background: linear-gradient(135deg, var(--bg-color) 0%, var(--bg-secondary) 100%);
+}
+
+.mosaic-tile {
+  position: relative;
+  overflow: hidden;
+}
+
+.mosaic-tile-image {
+  position: absolute;
+  top: 0;
+  left: 0;
+  width: 100%;
+  height: 100%;
+  background-size: cover;
+  background-position: center;
+  background-repeat: no-repeat;
+  opacity: 0;
+  animation: imageCycle var(--cycle-duration, 20s) infinite;
+  animation-delay: calc(var(--start-offset, 0s) + var(--adjusted-delay, 0s));
+  animation-timing-function: ease-in-out;
+  animation-fill-mode: both;
+}
+
+/* Show initial image immediately - inline styles + !important should override animation */
+.mosaic-tile-image.initial-image {
+  /* Inline styles set opacity: 1 and transform: scale(1) */
+  /* This class with !important provides additional override if needed */
+  opacity: 1 !important;
+  transform: scale(1) !important;
+}
+
+/* Each image fades in, displays for its duration, then fades out */
+/* The animation-delay ensures each image appears at the right time */
+/* Each image is visible for (image-duration / cycle-duration) of the cycle */
+/* For 5 images with 4s each = 20s cycle, each image is visible for 20% of cycle */
+@keyframes imageCycle {
+  0% {
+    opacity: 0;
+    transform: scale(1.05);
+  }
+  2% {
+    opacity: 1;
+    transform: scale(1);
+  }
+  /* Each image shows for approximately (100 / total-images)% of the cycle */
+  /* With animation-delay, images appear sequentially */
+  /* We show each image for most of its time slot, with fade transitions */
+  18% {
+    opacity: 1;
+    transform: scale(1);
+  }
+  20% {
+    opacity: 0;
+    transform: scale(0.95);
+  }
+  100% {
+    opacity: 0;
+    transform: scale(0.95);
+  }
+}
+
+/* Fade in animation for initial load */
+.mosaic-tile {
+  animation: fadeIn 1s ease-in;
+}
+
+@keyframes fadeIn {
+  from {
+    opacity: 0;
+  }
+  to {
+    opacity: 1;
+  }
+}
+
+/* Ensure mosaic doesn't interfere with content */
+body {
+  position: relative;
+}
+
+#root {
+  position: relative;
+  z-index: 1;
+}
+

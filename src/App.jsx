@@ -7,6 +7,7 @@ import LiftSharing from './components/LiftSharing'
 import EventDetails from './components/EventDetails'
 import Feedback from './components/Feedback'
 import Framies from './components/Framies'
+import BackgroundMosaic from './components/BackgroundMosaic'
 import { fetchRSVPs, saveRSVPs, fetchMenu, saveMenu, fetchConfig, saveConfig, fetchEventDetails, saveEventDetails } from './api'
 import { DEFAULT_TABLES_COUNT, DEFAULT_SEATS_PER_TABLE } from './utils/constants'
 import { getSocket, disconnectSocket } from './utils/websocket'
@@ -75,6 +76,8 @@ function App() {
   const [eventDetails, setEventDetails] = useState(null) // Event details object
   const [rsvpLocked, setRsvpLocked] = useState(false) // Lock state for RSVP submissions
   const [seatingLocked, setSeatingLocked] = useState(false) // Lock state for seat changes
+  const [framiesNominationsLocked, setFramiesNominationsLocked] = useState(false) // Lock state for Framies nominations
+  const [framiesVotingLocked, setFramiesVotingLocked] = useState(false) // Lock state for Framies voting
   const [currentStep, setCurrentStep] = useState('menu') // 'menu', 'rsvp', 'seating', 'liftsharing', 'eventdetails', 'feedback', 'framies', or 'admin'
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState(null)
@@ -115,6 +118,8 @@ function App() {
         setTableDisplayNames(configData.tableDisplayNames || null)
         setRsvpLocked(configData.rsvpLocked || false)
         setSeatingLocked(configData.seatingLocked || false)
+        setFramiesNominationsLocked(configData.framiesNominationsLocked || false)
+        setFramiesVotingLocked(configData.framiesVotingLocked || false)
         setEventDetails(eventData)
       } catch (err) {
         logger.error('Error loading data:', err)
@@ -140,6 +145,7 @@ function App() {
     socket.on('rsvps:updated', (updatedRsvps) => {
       logger.debug('Received rsvps:updated event', updatedRsvps?.length, 'RSVPs')
       if (Array.isArray(updatedRsvps)) {
+        // Set flag BEFORE updating state to prevent save loop
         isUpdatingFromWebSocket.current = true
         // Create a new array reference to ensure React detects the change
         const newRsvps = [...updatedRsvps]
@@ -147,10 +153,10 @@ function App() {
         setRsvps(newRsvps)
         // Increment version to force re-render
         setRsvpsVersion(prev => prev + 1)
-        // Reset flag after state update
+        // Reset flag after state update completes (use longer timeout to ensure useEffect has run)
         setTimeout(() => {
           isUpdatingFromWebSocket.current = false
-        }, 100)
+        }, 500)
       }
     })
 
@@ -199,6 +205,12 @@ function App() {
         if (updatedConfig.seatingLocked !== undefined) {
           setSeatingLocked(updatedConfig.seatingLocked)
         }
+        if (updatedConfig.framiesNominationsLocked !== undefined) {
+          setFramiesNominationsLocked(updatedConfig.framiesNominationsLocked)
+        }
+        if (updatedConfig.framiesVotingLocked !== undefined) {
+          setFramiesVotingLocked(updatedConfig.framiesVotingLocked)
+        }
         setTimeout(() => {
           isUpdatingFromWebSocket.current = false
         }, 100)
@@ -227,12 +239,22 @@ function App() {
 
   // Save to API whenever RSVPs change (but not if update came from WebSocket)
   useEffect(() => {
-    if (!loading && !isUpdatingFromWebSocket.current) {
-      saveRSVPs(rsvps).catch(err => {
-        logger.error('Error saving RSVPs:', err)
-        setError('Failed to save RSVPs. Please try again.')
-      })
+    // Skip if we're still loading initial data
+    if (loading) return
+    
+    // Skip if this update came from WebSocket
+    if (isUpdatingFromWebSocket.current) {
+      logger.debug('Skipping RSVP save - update came from WebSocket')
+      return
     }
+    
+    // Only save if RSVPs array actually changed (not just reference)
+    // This prevents unnecessary saves on re-renders
+    logger.debug('Saving RSVPs to API, count:', rsvps.length)
+    saveRSVPs(rsvps).catch(err => {
+      logger.error('Error saving RSVPs:', err)
+      setError('Failed to save RSVPs. Please try again.')
+    })
   }, [rsvps, loading])
 
   // Save to API whenever menu categories change (but not if update came from WebSocket)
@@ -248,12 +270,12 @@ function App() {
   // Save to API whenever tables count, seats per table, table positions, custom areas, grid size, table display names, or lock states change (but not if update came from WebSocket)
   useEffect(() => {
     if (!loading && !isUpdatingFromWebSocket.current) {
-      saveConfig(tablesCount, seatsPerTable, tablePositions, customAreas, gridCols, gridRows, tableDisplayNames, rsvpLocked, seatingLocked).catch(err => {
+      saveConfig(tablesCount, seatsPerTable, tablePositions, customAreas, gridCols, gridRows, tableDisplayNames, rsvpLocked, seatingLocked, framiesNominationsLocked, framiesVotingLocked).catch(err => {
         logger.error('Error saving config:', err)
         setError('Failed to save configuration. Please try again.')
       })
     }
-  }, [tablesCount, seatsPerTable, tablePositions, customAreas, gridCols, gridRows, tableDisplayNames, rsvpLocked, seatingLocked, loading])
+  }, [tablesCount, seatsPerTable, tablePositions, customAreas, gridCols, gridRows, tableDisplayNames, rsvpLocked, seatingLocked, framiesNominationsLocked, framiesVotingLocked, loading])
 
   const handleRSVPSubmit = (rsvpData) => {
     const newRSVP = {
@@ -448,6 +470,14 @@ function App() {
     setSeatingLocked(locked)
   }
 
+  const handleUpdateFramiesNominationsLocked = (locked) => {
+    setFramiesNominationsLocked(locked)
+  }
+
+  const handleUpdateFramiesVotingLocked = (locked) => {
+    setFramiesVotingLocked(locked)
+  }
+
   if (loading) {
     return (
       <div className="app">
@@ -466,6 +496,7 @@ function App() {
 
   return (
     <div className="app">
+      <BackgroundMosaic />
       <header className="app-header">
         <div className="app-header-content">
           <div>
@@ -478,6 +509,46 @@ function App() {
             </button>
           )}
         </div>
+        {currentStep !== 'menu' && (
+          <nav className="app-navigation">
+            <button
+              onClick={() => handleNavigate('rsvp')}
+              className={`nav-tab ${currentStep === 'rsvp' ? 'active' : ''}`}
+            >
+              📝 RSVP
+            </button>
+            <button
+              onClick={() => handleNavigate('seating')}
+              className={`nav-tab ${currentStep === 'seating' ? 'active' : ''}`}
+            >
+              🪑 Seating
+            </button>
+            <button
+              onClick={() => handleNavigate('liftsharing')}
+              className={`nav-tab ${currentStep === 'liftsharing' ? 'active' : ''}`}
+            >
+              🚗 Lift Sharing
+            </button>
+            <button
+              onClick={() => handleNavigate('eventdetails')}
+              className={`nav-tab ${currentStep === 'eventdetails' ? 'active' : ''}`}
+            >
+              📅 Event Details
+            </button>
+            <button
+              onClick={() => handleNavigate('feedback')}
+              className={`nav-tab ${currentStep === 'feedback' ? 'active' : ''}`}
+            >
+              💬 Feedback
+            </button>
+            <button
+              onClick={() => handleNavigate('framies')}
+              className={`nav-tab ${currentStep === 'framies' ? 'active' : ''}`}
+            >
+              🏆 Framies
+            </button>
+          </nav>
+        )}
       </header>
       {error && (
         <div style={{ 
@@ -526,6 +597,8 @@ function App() {
           <Framies 
             onBackToMenu={handleBackToMenu}
             rsvps={rsvps}
+            framiesNominationsLocked={framiesNominationsLocked}
+            framiesVotingLocked={framiesVotingLocked}
           />
         ) : currentStep === 'admin' ? (
           <Admin 
@@ -540,6 +613,8 @@ function App() {
             eventDetails={eventDetails}
             rsvpLocked={rsvpLocked}
             seatingLocked={seatingLocked}
+            framiesNominationsLocked={framiesNominationsLocked}
+            framiesVotingLocked={framiesVotingLocked}
             onUpdateRSVPs={handleUpdateRSVPs}
             onUpdateMenuCategories={handleUpdateMenuCategories}
             onUpdateTablesCount={handleUpdateTablesCount}
@@ -551,6 +626,8 @@ function App() {
             onUpdateEventDetails={handleUpdateEventDetails}
             onUpdateRsvpLocked={handleUpdateRsvpLocked}
             onUpdateSeatingLocked={handleUpdateSeatingLocked}
+            onUpdateFramiesNominationsLocked={handleUpdateFramiesNominationsLocked}
+            onUpdateFramiesVotingLocked={handleUpdateFramiesVotingLocked}
             onBackToMenu={handleBackToMenu}
           />
         ) : (

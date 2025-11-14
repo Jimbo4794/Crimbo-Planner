@@ -40,6 +40,7 @@ body {
   -webkit-font-smoothing: antialiased;
   -moz-osx-font-smoothing: grayscale;
   background: linear-gradient(135deg, var(--bg-color) 0%, var(--bg-secondary) 100%);
+  /* Fallback background image - will be overridden by mosaic if images exist */
   background-image: url('/background.png');
   background-size: cover;
   background-position: center;
@@ -52,6 +53,11 @@ body {
   position: relative;
 }
 
+/* Hide default background when mosaic is present */
+body:has(.background-mosaic) {
+  background-image: none;
+}
+
 body::before {
   content: '';
   position: fixed;
@@ -62,7 +68,7 @@ body::before {
   background: radial-gradient(circle at 20% 50%, rgba(59, 130, 246, 0.1) 0%, transparent 50%),
               radial-gradient(circle at 80% 80%, rgba(16, 185, 129, 0.1) 0%, transparent 50%);
   pointer-events: none;
-  z-index: 0;
+  z-index: -1;
 }
 
 #root {

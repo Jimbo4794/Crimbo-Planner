@@ -2,10 +2,11 @@ import { useState, useEffect } from 'react'
 import './Admin.css'
 import ImageCropper from './ImageCropper'
 import { AVAILABLE_ICONS, MAX_IMAGE_SIZE } from '../utils/constants'
-import { saveEventDetails, fetchFeedback, deleteFeedback, adminLogin, adminLogout, checkAdminSession, createManualBackup, fetchAwards, saveAwards } from '../api'
+import { saveEventDetails, fetchFeedback, deleteFeedback, adminLogin, adminLogout, checkAdminSession, createManualBackup, fetchAwards, saveAwards, fetchFramies, fetchBackgroundImages, addBackgroundImage, deleteBackgroundImage } from '../api'
+import { getSocket } from '../utils/websocket'
 import logger from '../utils/logger'
 
-function Admin({ rsvps, menuCategories, tablesCount, seatsPerTable, tablePositions, customAreas, gridCols, gridRows, eventDetails, rsvpLocked, seatingLocked, onUpdateRSVPs, onUpdateMenuCategories, onUpdateTablesCount, onUpdateSeatsPerTable, onUpdateTablePositions, onUpdateCustomAreas, onUpdateGridCols, onUpdateGridRows, onUpdateEventDetails, onUpdateRsvpLocked, onUpdateSeatingLocked, onBackToMenu }) {
+function Admin({ rsvps, menuCategories, tablesCount, seatsPerTable, tablePositions, customAreas, gridCols, gridRows, eventDetails, rsvpLocked, seatingLocked, framiesNominationsLocked, framiesVotingLocked, onUpdateRSVPs, onUpdateMenuCategories, onUpdateTablesCount, onUpdateSeatsPerTable, onUpdateTablePositions, onUpdateCustomAreas, onUpdateGridCols, onUpdateGridRows, onUpdateEventDetails, onUpdateRsvpLocked, onUpdateSeatingLocked, onUpdateFramiesNominationsLocked, onUpdateFramiesVotingLocked, onBackToMenu }) {
   // Helper function to get menu option label by ID
   const getMenuOptionLabel = (menuId) => {
     for (const category of menuCategories) {
@@ -17,7 +18,7 @@ function Admin({ rsvps, menuCategories, tablesCount, seatsPerTable, tablePositio
   const [isAuthenticated, setIsAuthenticated] = useState(false)
   const [password, setPassword] = useState('')
   const [passwordError, setPasswordError] = useState('')
-  const [activeTab, setActiveTab] = useState('users') // 'users', 'menu', 'seating', 'arrangement', 'event', 'feedback', 'awards', or 'storage'
+  const [activeTab, setActiveTab] = useState('users') // 'users', 'menu', 'seating', 'arrangement', 'event', 'feedback', 'awards', 'background', or 'storage'
   const [editingRSVP, setEditingRSVP] = useState(null)
   const [editingMenu, setEditingMenu] = useState(false)
   const [eventDetailsForm, setEventDetailsForm] = useState({
@@ -405,6 +406,12 @@ function Admin({ rsvps, menuCategories, tablesCount, seatsPerTable, tablePositio
           Awards
         </button>
         <button
+          className={`tab-button ${activeTab === 'background' ? 'active' : ''}`}
+          onClick={() => setActiveTab('background')}
+        >
+          Background Images
+        </button>
+        <button
           className={`tab-button ${activeTab === 'storage' ? 'active' : ''}`}
           onClick={() => setActiveTab('storage')}
         >
@@ -453,9 +460,37 @@ function Admin({ rsvps, menuCategories, tablesCount, seatsPerTable, tablePositio
                     {seatingLocked ? '🔒 Locked' : '🔓 Unlocked'}
                   </span>
                 </div>
+                <div className="lock-control-item">
+                  <label htmlFor="framies-nominations-lock">
+                    Lock Framies Nominations:
+                  </label>
+                  <input
+                    type="checkbox"
+                    id="framies-nominations-lock"
+                    checked={framiesNominationsLocked}
+                    onChange={(e) => onUpdateFramiesNominationsLocked(e.target.checked)}
+                  />
+                  <span className={`lock-status ${framiesNominationsLocked ? 'locked' : 'unlocked'}`}>
+                    {framiesNominationsLocked ? '🔒 Locked' : '🔓 Unlocked'}
+                  </span>
+                </div>
+                <div className="lock-control-item">
+                  <label htmlFor="framies-voting-lock">
+                    Lock Framies Voting:
+                  </label>
+                  <input
+                    type="checkbox"
+                    id="framies-voting-lock"
+                    checked={framiesVotingLocked}
+                    onChange={(e) => onUpdateFramiesVotingLocked(e.target.checked)}
+                  />
+                  <span className={`lock-status ${framiesVotingLocked ? 'locked' : 'unlocked'}`}>
+                    {framiesVotingLocked ? '🔒 Locked' : '🔓 Unlocked'}
+                  </span>
+                </div>
               </div>
               <p className="lock-controls-description">
-                When RSVP submissions are locked, users cannot submit new RSVPs. When the seating plan is locked, users cannot change their seat assignments.
+                When RSVP submissions are locked, users cannot submit new RSVPs. When the seating plan is locked, users cannot change their seat assignments. When Framies nominations are locked, users cannot add new nominations. When Framies voting is locked, users cannot vote.
               </p>
             </div>
             
@@ -925,6 +960,9 @@ function Admin({ rsvps, menuCategories, tablesCount, seatsPerTable, tablePositio
         )}
         {activeTab === 'awards' && (
           <AwardManagement />
+        )}
+        {activeTab === 'background' && (
+          <BackgroundImageManagement adminSessionId={adminSessionId} />
         )}
         {activeTab === 'storage' && (
           <StorageManagement
@@ -1439,11 +1477,19 @@ function StorageManagement({ rsvps, menuCategories, tablesCount, seatsPerTable, 
 
 function AwardManagement() {
   const [awards, setAwards] = useState([])
+  const [framiesData, setFramiesData] = useState({ nominations: [], votes: [] })
   const [loading, setLoading] = useState(true)
+  const [loadingVotes, setLoadingVotes] = useState(true)
   const [editingAward, setEditingAward] = useState(null)
   const [newAwardName, setNewAwardName] = useState('')
+  const [newAwardDescription, setNewAwardDescription] = useState('')
   const [message, setMessage] = useState(null)
   const [saving, setSaving] = useState(false)
+  const [expandedSections, setExpandedSections] = useState({
+    addAward: true,
+    currentAwards: true,
+    voteStats: true
+  })
 
   // Generate UUID v4
   const generateUUID = () => {
@@ -1452,6 +1498,7 @@ function AwardManagement() {
 
   useEffect(() => {
     loadAwards()
+    loadFramies()
   }, [])
 
   const loadAwards = async () => {
@@ -1465,6 +1512,50 @@ function AwardManagement() {
       setTimeout(() => setMessage(null), 5000)
     } finally {
       setLoading(false)
+    }
+  }
+
+  const loadFramies = async () => {
+    try {
+      setLoadingVotes(true)
+      const data = await fetchFramies()
+      setFramiesData(data || { nominations: [], votes: [] })
+    } catch (error) {
+      logger.error('Error loading framies data:', error)
+    } finally {
+      setLoadingVotes(false)
+    }
+  }
+
+  // Get nominations for a specific award
+  const getNominationsForAward = (awardId) => {
+    return (framiesData.nominations || []).filter(n => n.awardId === awardId)
+  }
+
+  // Get vote count for a nomination
+  const getVoteCount = (nominationId) => {
+    return (framiesData.votes || []).filter(v => v.nominationId === nominationId).length
+  }
+
+  // Get vote statistics for an award
+  const getAwardVoteStats = (awardId) => {
+    const nominations = getNominationsForAward(awardId)
+    const nominationStats = nominations.map(nom => ({
+      ...nom,
+      voteCount: getVoteCount(nom.id)
+    })).sort((a, b) => b.voteCount - a.voteCount)
+    
+    const totalVotes = nominationStats.reduce((sum, nom) => sum + nom.voteCount, 0)
+    const uniqueVoters = new Set((framiesData.votes || [])
+      .filter(v => nominations.some(n => n.id === v.nominationId))
+      .map(v => v.voterEmail || v.voterId)
+    ).size
+
+    return {
+      nominations: nominationStats,
+      totalVotes,
+      uniqueVoters,
+      nominationCount: nominations.length
     }
   }
 
@@ -1494,11 +1585,13 @@ function AwardManagement() {
 
     const updatedAwards = [...awards, {
       id: generateUUID(),
-      label: newAwardName.trim()
+      label: newAwardName.trim(),
+      description: newAwardDescription.trim() || ''
     }]
     
     handleSaveAwards(updatedAwards)
     setNewAwardName('')
+    setNewAwardDescription('')
   }
 
   const handleEditAward = (award) => {
@@ -1513,7 +1606,11 @@ function AwardManagement() {
     }
 
     const updatedAwards = awards.map(a => 
-      a.id === editingAward.id ? { id: editingAward.id, label: editingAward.label.trim() } : a
+      a.id === editingAward.id ? { 
+        id: editingAward.id, 
+        label: editingAward.label.trim(),
+        description: editingAward.description?.trim() || ''
+      } : a
     )
     
     handleSaveAwards(updatedAwards)
@@ -1539,6 +1636,105 @@ function AwardManagement() {
     handleSaveAwards(updatedAwards)
   }
 
+  const toggleSection = (section) => {
+    setExpandedSections(prev => ({
+      ...prev,
+      [section]: !prev[section]
+    }))
+  }
+
+  const handleExportVotingData = () => {
+    const csvRows = []
+    
+    // Add summary section with winners
+    csvRows.push('AWARD WINNERS SUMMARY')
+    csvRows.push('')
+    csvRows.push(['Award Category', 'Winner', 'Vote Count', 'Rationale', 'Total Votes in Category', 'Total Voters'].join(','))
+    
+    awards.forEach(award => {
+      const stats = getAwardVoteStats(award.id)
+      if (stats.nominations.length > 0) {
+        const winner = stats.nominations[0] // First one is the winner (sorted by vote count)
+        const rationaleStr = `"${(winner.rationale || '').replace(/"/g, '""')}"`
+        const row = [
+          `"${award.label}"`,
+          `"${winner.nominee}"`,
+          winner.voteCount,
+          rationaleStr,
+          stats.totalVotes,
+          stats.uniqueVoters
+        ]
+        csvRows.push(row.join(','))
+      } else {
+        const row = [
+          `"${award.label}"`,
+          'No nominations',
+          '0',
+          '""',
+          '0',
+          '0'
+        ]
+        csvRows.push(row.join(','))
+      }
+    })
+    
+    // Add separator
+    csvRows.push('')
+    csvRows.push('DETAILED VOTING DATA')
+    csvRows.push('')
+    
+    // Create CSV header for detailed data
+    const headers = ['Award Category', 'Nominee', 'Vote Count', 'Rationale', 'Voter Emails', 'Nominated At', 'Nominated By']
+    csvRows.push(headers.join(','))
+    
+    // Convert voting data to CSV rows
+    awards.forEach(award => {
+      const stats = getAwardVoteStats(award.id)
+      
+      stats.nominations.forEach(nomination => {
+        // Get all voters for this nomination
+        const votes = (framiesData.votes || []).filter(v => v.nominationId === nomination.id)
+        const voterEmails = votes
+          .map(v => v.voterEmail || v.voterId || 'Unknown')
+          .filter((email, index, self) => self.indexOf(email) === index) // Remove duplicates
+          .join('; ')
+        
+        const rationaleStr = `"${(nomination.rationale || '').replace(/"/g, '""')}"`
+        const voterEmailsStr = `"${voterEmails.replace(/"/g, '""')}"`
+        const nominatedAt = nomination.nominatedAt 
+          ? new Date(nomination.nominatedAt).toLocaleString() 
+          : ''
+        const nominatedBy = nomination.nominatedBy || 'Anonymous'
+        
+        const row = [
+          `"${award.label}"`,
+          `"${nomination.nominee}"`,
+          nomination.voteCount,
+          rationaleStr,
+          voterEmailsStr,
+          `"${nominatedAt}"`,
+          `"${nominatedBy}"`
+        ]
+        csvRows.push(row.join(','))
+      })
+    })
+    
+    // Create CSV content
+    const csvContent = csvRows.join('\n')
+    
+    // Create blob and download
+    const blob = new Blob([csvContent], { type: 'text/csv;charset=utf-8;' })
+    const link = document.createElement('a')
+    const url = URL.createObjectURL(blob)
+    link.setAttribute('href', url)
+    link.setAttribute('download', `framies-voting-data-${new Date().toISOString().split('T')[0]}.csv`)
+    link.style.visibility = 'hidden'
+    document.body.appendChild(link)
+    link.click()
+    document.body.removeChild(link)
+    URL.revokeObjectURL(url)
+  }
+
   if (loading) {
     return <div className="award-management-section">Loading awards...</div>
   }
@@ -1556,9 +1752,17 @@ function AwardManagement() {
         </div>
       )}
 
-      <div className="award-form-section">
-        <h4>Add New Award</h4>
-        <div className="award-form-row">
+      <div className="award-form-section collapsible-section">
+        <div 
+          className="collapsible-header"
+          onClick={() => toggleSection('addAward')}
+        >
+          <h4>Add New Award</h4>
+          <span className="collapse-icon">{expandedSections.addAward ? '▼' : '▶'}</span>
+        </div>
+        {expandedSections.addAward && (
+          <div className="collapsible-content">
+            <div className="award-form-fields">
           <div className="form-group">
             <label htmlFor="new-award-name">Award Name *</label>
             <input
@@ -1567,6 +1771,16 @@ function AwardManagement() {
               value={newAwardName}
               onChange={(e) => setNewAwardName(e.target.value)}
               placeholder="e.g., Best Dancer"
+            />
+          </div>
+          <div className="form-group">
+            <label htmlFor="new-award-description">Description</label>
+            <input
+              id="new-award-description"
+              type="text"
+              value={newAwardDescription}
+              onChange={(e) => setNewAwardDescription(e.target.value)}
+              placeholder="e.g., Who has the best moves on the dance floor?"
               onKeyPress={(e) => {
                 if (e.key === 'Enter') {
                   handleAddAward()
@@ -1574,15 +1788,25 @@ function AwardManagement() {
               }}
             />
           </div>
-          <button onClick={handleAddAward} className="add-award-button" disabled={saving}>
-            ➕ Add Award
-          </button>
-        </div>
+            </div>
+            <button onClick={handleAddAward} className="add-award-button" disabled={saving}>
+              ➕ Add Award
+            </button>
+          </div>
+        )}
       </div>
 
-      <div className="awards-list-section">
-        <h4>Current Awards ({awards.length})</h4>
-        {awards.length === 0 ? (
+      <div className="awards-list-section collapsible-section">
+        <div 
+          className="collapsible-header"
+          onClick={() => toggleSection('currentAwards')}
+        >
+          <h4>Current Awards ({awards.length})</h4>
+          <span className="collapse-icon">{expandedSections.currentAwards ? '▼' : '▶'}</span>
+        </div>
+        {expandedSections.currentAwards && (
+          <div className="collapsible-content">
+            {awards.length === 0 ? (
           <p className="no-awards">No awards configured. Add your first award above.</p>
         ) : (
           <div className="awards-list">
@@ -1596,6 +1820,15 @@ function AwardManagement() {
                         type="text"
                         value={editingAward.label}
                         onChange={(e) => setEditingAward({ ...editingAward, label: e.target.value })}
+                      />
+                    </div>
+                    <div className="form-group">
+                      <label>Description</label>
+                      <input
+                        type="text"
+                        value={editingAward.description || ''}
+                        onChange={(e) => setEditingAward({ ...editingAward, description: e.target.value })}
+                        placeholder="e.g., Who has the best moves on the dance floor?"
                         onKeyPress={(e) => {
                           if (e.key === 'Enter') {
                             handleUpdateAward()
@@ -1645,6 +1878,79 @@ function AwardManagement() {
                 )}
               </div>
             ))}
+          </div>
+            )}
+          </div>
+        )}
+      </div>
+
+      <div className="award-votes-section collapsible-section">
+        <div 
+          className="collapsible-header award-votes-header"
+          onClick={() => toggleSection('voteStats')}
+        >
+          <h4>Vote Statistics</h4>
+          <div className="header-actions" onClick={(e) => e.stopPropagation()}>
+            <button onClick={handleExportVotingData} className="export-button" disabled={loadingVotes || awards.length === 0}>
+              📥 Export Voting Data
+            </button>
+            <button onClick={loadFramies} className="refresh-button" disabled={loadingVotes}>
+              {loadingVotes ? 'Loading...' : '🔄 Refresh'}
+            </button>
+            <span className="collapse-icon">{expandedSections.voteStats ? '▼' : '▶'}</span>
+          </div>
+        </div>
+        {expandedSections.voteStats && (
+          <div className="collapsible-content">
+            {loadingVotes ? (
+          <p className="loading-text">Loading vote data...</p>
+        ) : awards.length === 0 ? (
+          <p className="no-data">No awards to display votes for.</p>
+        ) : (
+          <div className="award-votes-grid">
+            {awards.map(award => {
+              const stats = getAwardVoteStats(award.id)
+              return (
+                <div key={award.id} className="award-vote-card">
+                  <div className="award-vote-header">
+                    <h5>{award.label}</h5>
+                    <div className="award-vote-summary">
+                      <span className="vote-stat">
+                        <strong>{stats.totalVotes}</strong> total vote{stats.totalVotes !== 1 ? 's' : ''}
+                      </span>
+                      <span className="vote-stat">
+                        <strong>{stats.uniqueVoters}</strong> voter{stats.uniqueVoters !== 1 ? 's' : ''}
+                      </span>
+                      <span className="vote-stat">
+                        <strong>{stats.nominationCount}</strong> nomination{stats.nominationCount !== 1 ? 's' : ''}
+                      </span>
+                    </div>
+                  </div>
+                  {stats.nominations.length === 0 ? (
+                    <p className="no-nominations">No nominations yet.</p>
+                  ) : (
+                    <div className="nomination-votes-list">
+                      {stats.nominations.map((nomination, idx) => (
+                        <div key={nomination.id} className="nomination-vote-item">
+                          <div className="nomination-vote-info">
+                            <span className="nomination-rank">#{idx + 1}</span>
+                            <span className="nomination-name">{nomination.nominee}</span>
+                            <span className="nomination-vote-count">
+                              {nomination.voteCount} vote{nomination.voteCount !== 1 ? 's' : ''}
+                            </span>
+                          </div>
+                          {nomination.rationale && (
+                            <p className="nomination-vote-rationale">{nomination.rationale}</p>
+                          )}
+                        </div>
+                      ))}
+                    </div>
+                  )}
+                </div>
+              )
+            })}
+          </div>
+            )}
           </div>
         )}
       </div>
@@ -2088,6 +2394,250 @@ function TableArrangement({ tablesCount, tablePositions, customAreas, gridCols =
             </div>
           )
         })}
+      </div>
+    </div>
+  )
+}
+
+function BackgroundImageManagement({ adminSessionId }) {
+  const [images, setImages] = useState([])
+  const [loading, setLoading] = useState(true)
+  const [uploading, setUploading] = useState(false)
+  const [message, setMessage] = useState(null)
+
+  useEffect(() => {
+    loadImages()
+    
+    // Listen for WebSocket updates
+    const socket = getSocket()
+    socket.on('background-images:updated', (updatedImages) => {
+      if (Array.isArray(updatedImages)) {
+        setImages(updatedImages)
+      }
+    })
+
+    return () => {
+      socket.off('background-images:updated')
+    }
+  }, [])
+
+  const loadImages = async () => {
+    try {
+      setLoading(true)
+      const data = await fetchBackgroundImages()
+      setImages(Array.isArray(data) ? data : [])
+    } catch (error) {
+      logger.error('Error loading background images:', error)
+      setMessage({ type: 'error', text: 'Failed to load background images' })
+      setTimeout(() => setMessage(null), 5000)
+    } finally {
+      setLoading(false)
+    }
+  }
+
+  // Compress image using Canvas API
+  const compressImage = async (file, maxWidth = 1920, maxHeight = 1920, quality = 0.8) => {
+    return new Promise((resolve, reject) => {
+      const reader = new FileReader()
+      reader.onload = (event) => {
+        const img = new Image()
+        img.onload = () => {
+          // Calculate new dimensions while maintaining aspect ratio
+          let width = img.width
+          let height = img.height
+          
+          if (width > maxWidth || height > maxHeight) {
+            const ratio = Math.min(maxWidth / width, maxHeight / height)
+            width = width * ratio
+            height = height * ratio
+          }
+          
+          // Create canvas and draw resized image
+          const canvas = document.createElement('canvas')
+          canvas.width = width
+          canvas.height = height
+          const ctx = canvas.getContext('2d')
+          ctx.drawImage(img, 0, 0, width, height)
+          
+          // Convert to JPEG with compression (smaller than PNG)
+          const compressedDataUrl = canvas.toDataURL('image/jpeg', quality)
+          resolve(compressedDataUrl)
+        }
+        img.onerror = () => reject(new Error(`Failed to load image: ${file.name}`))
+        img.src = event.target.result
+      }
+      reader.onerror = () => reject(new Error(`Failed to read file: ${file.name}`))
+      reader.readAsDataURL(file)
+    })
+  }
+
+  const handleImageUpload = async (e) => {
+    const files = Array.from(e.target.files || [])
+    if (files.length === 0) return
+
+    // Validate all files first
+    const invalidFiles = files.filter(file => !file.type.startsWith('image/'))
+    if (invalidFiles.length > 0) {
+      setMessage({ type: 'error', text: `Please select valid image files. ${invalidFiles.length} file(s) are not images.` })
+      setTimeout(() => setMessage(null), 5000)
+      e.target.value = ''
+      return
+    }
+
+    const oversizedFiles = files.filter(file => file.size > MAX_IMAGE_SIZE)
+    if (oversizedFiles.length > 0) {
+      setMessage({ type: 'error', text: `Some images are too large. ${oversizedFiles.length} file(s) exceed 5MB limit.` })
+      setTimeout(() => setMessage(null), 5000)
+      e.target.value = ''
+      return
+    }
+
+    try {
+      setUploading(true)
+      setMessage(null)
+
+      let successCount = 0
+      let errorCount = 0
+      const errors = []
+
+      // Process files sequentially to avoid overwhelming the server
+      for (const file of files) {
+        try {
+          // Compress and convert to base64
+          const originalSize = file.size
+          const imageData = await compressImage(file)
+          
+          // Calculate compressed size (approximate from base64)
+          const compressedSize = (imageData.length * 3) / 4
+          const compressionRatio = ((originalSize - compressedSize) / originalSize * 100).toFixed(1)
+          
+          logger.debug(`Compressed ${file.name}: ${(originalSize / 1024 / 1024).toFixed(2)}MB -> ${(compressedSize / 1024 / 1024).toFixed(2)}MB (${compressionRatio}% reduction)`)
+
+          await addBackgroundImage(imageData, adminSessionId)
+          successCount++
+        } catch (error) {
+          logger.error(`Error uploading ${file.name}:`, error)
+          errorCount++
+          errors.push(`${file.name}: ${error.message || 'Failed to upload'}`)
+        }
+      }
+
+      // Reload images after all uploads
+      await loadImages()
+
+      // Show appropriate message
+      if (successCount > 0 && errorCount === 0) {
+        setMessage({ 
+          type: 'success', 
+          text: `Successfully uploaded ${successCount} image${successCount !== 1 ? 's' : ''}!` 
+        })
+        setTimeout(() => setMessage(null), 3000)
+      } else if (successCount > 0 && errorCount > 0) {
+        setMessage({ 
+          type: 'error', 
+          text: `Uploaded ${successCount} image(s), but ${errorCount} failed. ${errors.join('; ')}` 
+        })
+        setTimeout(() => setMessage(null), 8000)
+      } else {
+        setMessage({ 
+          type: 'error', 
+          text: `Failed to upload all images. ${errors.join('; ')}` 
+        })
+        setTimeout(() => setMessage(null), 8000)
+      }
+    } catch (error) {
+      logger.error('Error uploading images:', error)
+      setMessage({ type: 'error', text: 'Failed to upload images' })
+      setTimeout(() => setMessage(null), 5000)
+    } finally {
+      setUploading(false)
+      e.target.value = '' // Reset file input
+    }
+  }
+
+  const handleDeleteImage = async (imageId) => {
+    if (!window.confirm('Are you sure you want to delete this background image?')) {
+      return
+    }
+
+    try {
+      setMessage(null)
+      await deleteBackgroundImage(imageId, adminSessionId)
+      await loadImages()
+      setMessage({ type: 'success', text: 'Image deleted successfully!' })
+      setTimeout(() => setMessage(null), 3000)
+    } catch (error) {
+      logger.error('Error deleting background image:', error)
+      setMessage({ type: 'error', text: error.message || 'Failed to delete image' })
+      setTimeout(() => setMessage(null), 5000)
+    }
+  }
+
+  if (loading) {
+    return <div className="background-image-management-section">Loading background images...</div>
+  }
+
+  return (
+    <div className="background-image-management-section">
+      <h3>Background Image Catalog</h3>
+      <p className="section-description">
+        Manage the catalog of images used in the background mosaic. Images are randomly arranged in a mosaic pattern across the background.
+      </p>
+
+      {message && (
+        <div className={`background-message ${message.type === 'success' ? 'success-message' : 'error-message'}`}>
+          {message.text}
+        </div>
+      )}
+
+      <div className="background-upload-section">
+        <h4>Add New Image</h4>
+        <label htmlFor="background-image-upload" className="background-upload-label">
+          <input
+            type="file"
+            id="background-image-upload"
+            accept="image/*"
+            multiple
+            onChange={handleImageUpload}
+            disabled={uploading}
+            style={{ display: 'none' }}
+          />
+          <span className="background-upload-button">
+            {uploading ? '⏳ Uploading...' : '📷 Upload Images'}
+          </span>
+        </label>
+        <p className="form-help">Upload one or more images to add to the background mosaic catalog (max 5MB per image). Images are automatically compressed and resized to optimize loading times.</p>
+      </div>
+
+      <div className="background-images-list">
+        <h4>Current Images ({images.length})</h4>
+        {images.length === 0 ? (
+          <p className="no-data">No background images yet. Upload your first image above.</p>
+        ) : (
+          <div className="background-images-grid">
+            {images.map((image) => (
+              <div key={image.id} className="background-image-item">
+                <div className="background-image-preview">
+                  <img src={image.data} alt="Background" />
+                </div>
+                <div className="background-image-actions">
+                  <button
+                    onClick={() => handleDeleteImage(image.id)}
+                    className="delete-button"
+                    title="Delete image"
+                  >
+                    🗑️ Delete
+                  </button>
+                </div>
+                <div className="background-image-meta">
+                  <span className="background-image-date">
+                    Added: {new Date(image.addedAt).toLocaleDateString()}
+                  </span>
+                </div>
+              </div>
+            ))}
+          </div>
+        )}
       </div>
     </div>
   )

@@ -130,6 +130,10 @@ const readJSONFile = (filename) => {
   try {
     if (existsSync(filePath)) {
       const data = readFileSync(filePath, 'utf8');
+      if (data.trim() === '') {
+        // Empty file, return null
+        return null;
+      }
       return JSON.parse(data);
     }
   } catch (error) {
@@ -259,7 +263,7 @@ const scheduleBackups = () => {
   const backupInterval = BACKUP_INTERVAL_HOURS * 60 * 60 * 1000; // Convert hours to milliseconds
   
   // Files to backup
-  const filesToBackup = ['rsvps.json', 'framies.json', 'liftshares.json', 'awards.json'];
+  const filesToBackup = ['rsvps.json', 'framies.json', 'liftshares.json', 'awards.json', 'background-images.json'];
   
   // Create initial backup on startup
   logger.info('Creating initial backup...');
@@ -597,6 +601,39 @@ app.put('/api/framies', async (req, res) => {
       return res.status(400).json({ error: 'Framies data must be an object' });
     }
     
+    // Check if nominations or voting are locked
+    const config = readJSONFile('config.json');
+    
+    // Check if this is a new nomination (checking if nominations array has increased)
+    const currentFramies = readJSONFile('framies.json') || { nominations: [], votes: [] };
+    const currentNominations = currentFramies.nominations || [];
+    const newNominations = framiesData.nominations || [];
+    
+    // If nominations are locked and there are new nominations, reject
+    if (config && config.framiesNominationsLocked) {
+      if (newNominations.length > currentNominations.length) {
+        return res.status(403).json({ error: 'Framies nominations are currently locked. Please contact the administrator.' });
+      }
+      // Also check if any existing nomination was modified (by comparing IDs and content)
+      for (const newNom of newNominations) {
+        const existingNom = currentNominations.find(n => n.id === newNom.id);
+        if (!existingNom) {
+          // This is a new nomination
+          return res.status(403).json({ error: 'Framies nominations are currently locked. Please contact the administrator.' });
+        }
+      }
+    }
+    
+    // Check if voting is locked (checking if votes array has increased)
+    const currentVotes = currentFramies.votes || [];
+    const newVotes = framiesData.votes || [];
+    
+    if (config && config.framiesVotingLocked) {
+      if (newVotes.length > currentVotes.length) {
+        return res.status(403).json({ error: 'Framies voting is currently locked. Please contact the administrator.' });
+      }
+    }
+    
     // Atomic read-modify-write with lock held throughout
     const savedFramies = await readModifyWriteJSONFile('framies.json', () => {
       return framiesData;
@@ -673,7 +710,7 @@ app.get('/api/config', (req, res) => {
 
 app.put('/api/config', async (req, res) => {
   try {
-    const { tablesCount, seatsPerTable, tablePositions, customAreas, gridCols, gridRows, tableDisplayNames, rsvpLocked, seatingLocked } = req.body;
+    const { tablesCount, seatsPerTable, tablePositions, customAreas, gridCols, gridRows, tableDisplayNames, rsvpLocked, seatingLocked, framiesNominationsLocked, framiesVotingLocked } = req.body;
     const config = {
       tablesCount: tablesCount || 5,
       seatsPerTable: seatsPerTable || 8
@@ -713,6 +750,14 @@ app.put('/api/config', async (req, res) => {
       config.seatingLocked = seatingLocked;
     }
     
+    if (framiesNominationsLocked !== undefined) {
+      config.framiesNominationsLocked = framiesNominationsLocked;
+    }
+    
+    if (framiesVotingLocked !== undefined) {
+      config.framiesVotingLocked = framiesVotingLocked;
+    }
+    
     // Atomic read-modify-write with lock held throughout
     const savedConfig = await readModifyWriteJSONFile('config.json', (currentConfig) => {
       // Merge with existing config to preserve any other fields
@@ -742,6 +787,75 @@ const requireAdmin = (req, res, next) => {
   }
   next();
 };
+
+// Background Images endpoints
+app.get('/api/background-images', (req, res) => {
+  try {
+    const backgroundImages = readJSONFile('background-images.json');
+    // Return empty array if file doesn't exist or is null
+    res.json(Array.isArray(backgroundImages) ? backgroundImages : []);
+  } catch (error) {
+    logger.error('Error reading background images:', error);
+    // If file doesn't exist, return empty array instead of error
+    res.json([]);
+  }
+});
+
+app.post('/api/background-images', requireAdmin, async (req, res) => {
+  try {
+    const { imageData } = req.body;
+    if (!imageData || typeof imageData !== 'string') {
+      return res.status(400).json({ error: 'Image data is required and must be a string (base64)' });
+    }
+    
+    // Atomic read-modify-write with lock held throughout
+    const savedImages = await readModifyWriteJSONFile('background-images.json', (currentImages) => {
+      const images = currentImages || [];
+      const newImage = {
+        id: `bg_${Date.now()}_${Math.random().toString(36).substring(7)}`,
+        data: imageData,
+        addedAt: new Date().toISOString()
+      };
+      return [...images, newImage];
+    });
+    
+    // Emit real-time update to all connected clients
+    io.emit('background-images:updated', savedImages);
+    
+    res.json({ success: true, images: savedImages });
+  } catch (error) {
+    logger.error('Error adding background image:', error);
+    if (error.message.includes('lock')) {
+      res.status(503).json({ error: 'Server is busy processing another request. Please try again in a moment.' });
+    } else {
+      res.status(500).json({ error: 'Failed to add background image' });
+    }
+  }
+});
+
+app.delete('/api/background-images/:id', requireAdmin, async (req, res) => {
+  try {
+    const { id } = req.params;
+    
+    // Atomic read-modify-write with lock held throughout
+    const updatedImages = await readModifyWriteJSONFile('background-images.json', (currentImages) => {
+      const images = currentImages || [];
+      return images.filter(img => img.id !== id);
+    });
+    
+    // Emit real-time update to all connected clients
+    io.emit('background-images:updated', updatedImages);
+    
+    res.json({ success: true, images: updatedImages });
+  } catch (error) {
+    logger.error('Error deleting background image:', error);
+    if (error.message.includes('lock')) {
+      res.status(503).json({ error: 'Server is busy processing another request. Please try again in a moment.' });
+    } else {
+      res.status(500).json({ error: 'Failed to delete background image' });
+    }
+  }
+});
 
 // Admin login endpoint
 app.post('/api/admin/login', (req, res) => {
@@ -793,7 +907,7 @@ app.get('/api/admin/check', requireAdmin, (req, res) => {
 // Admin manual backup endpoint
 app.post('/api/admin/backup', requireAdmin, async (req, res) => {
   try {
-    const filesToBackup = ['rsvps.json', 'framies.json', 'liftshares.json', 'awards.json'];
+    const filesToBackup = ['rsvps.json', 'framies.json', 'liftshares.json', 'awards.json', 'background-images.json'];
     const backupPaths = [];
     
     for (const filename of filesToBackup) {

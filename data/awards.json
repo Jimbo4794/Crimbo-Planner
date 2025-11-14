@@ -1,10 +1,42 @@
 [
-  { "id": "550e8400-e29b-41d4-a716-446655440000", "label": "Best Dressed" },
-  { "id": "550e8400-e29b-41d4-a716-446655440001", "label": "Life of the Party" },
-  { "id": "550e8400-e29b-41d4-a716-446655440002", "label": "Best Dancer" },
-  { "id": "550e8400-e29b-41d4-a716-446655440003", "label": "Funniest Person" },
-  { "id": "550e8400-e29b-41d4-a716-446655440004", "label": "Most Helpful" },
-  { "id": "550e8400-e29b-41d4-a716-446655440005", "label": "Best Storyteller" },
-  { "id": "550e8400-e29b-41d4-a716-446655440006", "label": "Most Energetic" },
-  { "id": "550e8400-e29b-41d4-a716-446655440007", "label": "Best Singer" }
+  {
+    "id": "550e8400-e29b-41d4-a716-446655440000",
+    "label": "Best Dressed",
+    "description": "Who rocked the best outfit or style?"
+  },
+  {
+    "id": "550e8400-e29b-41d4-a716-446655440001",
+    "label": "Life of the Party",
+    "description": "The person who brings the most energy and fun!"
+  },
+  {
+    "id": "550e8400-e29b-41d4-a716-446655440003",
+    "label": "Funniest Person",
+    "description": "The one who made everyone laugh the most!"
+  },
+  {
+    "id": "550e8400-e29b-41d4-a716-446655440002",
+    "label": "Best Dancer",
+    "description": "Who has the best moves on the dance floor?"
+  },
+  {
+    "id": "550e8400-e29b-41d4-a716-446655440004",
+    "label": "Most Helpful",
+    "description": "Who went above and beyond to help others?"
+  },
+  {
+    "id": "550e8400-e29b-41d4-a716-446655440005",
+    "label": "Best Storyteller",
+    "description": "The master of captivating tales and anecdotes!"
+  },
+  {
+    "id": "550e8400-e29b-41d4-a716-446655440006",
+    "label": "Most Energetic",
+    "description": "Who kept the energy levels sky-high all night?"
+  },
+  {
+    "id": "550e8400-e29b-41d4-a716-446655440007",
+    "label": "Best Singer",
+    "description": "Who has the most impressive vocal talent?"
+  }
 ]

@@ -1,18 +1,57 @@
 import { useState, useEffect, useRef } from 'react'
+import { createPortal } from 'react-dom'
 import './Framies.css'
+import ImageCropper from './ImageCropper'
+import { MAX_IMAGE_SIZE } from '../utils/constants'
 import { fetchFramies, saveFramies, fetchAwards } from '../api'
 import { getSocket } from '../utils/websocket'
 import logger from '../utils/logger'
 
-function Framies({ onBackToMenu, rsvps = [] }) {
+function Framies({ onBackToMenu, rsvps = [], framiesNominationsLocked = false, framiesVotingLocked = false }) {
   const [framiesData, setFramiesData] = useState({ nominations: [], votes: [] })
   const [awards, setAwards] = useState([])
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState(null)
-  const [nominationForm, setNominationForm] = useState({ awardId: '', nominee: '' })
+  const [nominationForm, setNominationForm] = useState({ awardId: '', nominee: '', rationale: '' })
+  const [nominationImage, setNominationImage] = useState(null)
+  const [nominationImageFile, setNominationImageFile] = useState(null)
+  const [showImageCropper, setShowImageCropper] = useState(false)
   const [submitting, setSubmitting] = useState(false)
   const [submitMessage, setSubmitMessage] = useState(null)
+  const [selectedAward, setSelectedAward] = useState(null)
+  const [showNominationDialog, setShowNominationDialog] = useState(false)
+  const [showEmailDialog, setShowEmailDialog] = useState(false)
+  const [voterEmail, setVoterEmail] = useState(() => {
+    return localStorage.getItem('framies_voter_email') || ''
+  })
   const isUpdatingFromWebSocket = useRef(false)
+
+  // Email validation
+  const validateEmail = (email) => {
+    const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/
+    return emailRegex.test(email)
+  }
+
+  // Handle email submission
+  const handleEmailSubmit = (e) => {
+    e.preventDefault()
+    const email = voterEmail.trim()
+    if (!email) {
+      setSubmitMessage({ type: 'error', text: 'Please enter your email address.' })
+      setTimeout(() => setSubmitMessage(null), 5000)
+      return
+    }
+    if (!validateEmail(email)) {
+      setSubmitMessage({ type: 'error', text: 'Please enter a valid email address.' })
+      setTimeout(() => setSubmitMessage(null), 5000)
+      return
+    }
+    localStorage.setItem('framies_voter_email', email)
+    setVoterEmail(email) // Update state to reflect saved email
+    setSubmitMessage({ type: 'success', text: 'Email saved! You can now vote.' })
+    setTimeout(() => setSubmitMessage(null), 3000)
+    setShowEmailDialog(false) // Close dialog after successful submission
+  }
 
   // Get list of people from RSVPs for nomination dropdown
   const peopleList = rsvps
@@ -80,8 +119,59 @@ function Framies({ onBackToMenu, rsvps = [] }) {
     }
   }, [framiesData, loading])
 
+  const handleImageSelect = (e) => {
+    const file = e.target.files[0]
+    if (file) {
+      if (!file.type.startsWith('image/')) {
+        setSubmitMessage({ type: 'error', text: 'Please select a valid image file' })
+        setTimeout(() => setSubmitMessage(null), 5000)
+        return
+      }
+      if (file.size > MAX_IMAGE_SIZE) {
+        setSubmitMessage({ type: 'error', text: 'Image size must be less than 5MB' })
+        setTimeout(() => setSubmitMessage(null), 5000)
+        return
+      }
+      setNominationImageFile(file)
+      setShowImageCropper(true)
+    }
+  }
+
+  const handleCropComplete = (croppedImage) => {
+    setNominationImage(croppedImage)
+    setShowImageCropper(false)
+    setNominationImageFile(null)
+  }
+
+  const handleCancelCrop = () => {
+    setShowImageCropper(false)
+    setNominationImageFile(null)
+    if (!nominationImage) {
+      // Reset file input
+      const fileInput = document.getElementById('nomination-image-upload')
+      if (fileInput) {
+        fileInput.value = ''
+      }
+    }
+  }
+
+  const handleRemoveImage = () => {
+    setNominationImage(null)
+    const fileInput = document.getElementById('nomination-image-upload')
+    if (fileInput) {
+      fileInput.value = ''
+    }
+  }
+
   const handleNominate = async (e) => {
     e.preventDefault()
+    
+    // Check if nominations are locked
+    if (framiesNominationsLocked) {
+      setSubmitMessage({ type: 'error', text: 'Framies nominations are currently locked. Please contact the administrator.' })
+      setTimeout(() => setSubmitMessage(null), 5000)
+      return
+    }
     
     if (!nominationForm.awardId || !nominationForm.nominee.trim()) {
       setSubmitMessage({ type: 'error', text: 'Please select an award and enter a nominee name.' })
@@ -95,6 +185,8 @@ function Framies({ onBackToMenu, rsvps = [] }) {
         id: Date.now().toString(),
         awardId: nominationForm.awardId,
         nominee: nominationForm.nominee.trim(),
+        rationale: nominationForm.rationale.trim() || '',
+        supportingImage: nominationImage || null,
         nominatedBy: 'Anonymous', // Could be enhanced to use RSVP name/email
         nominatedAt: new Date().toISOString()
       }
@@ -105,9 +197,15 @@ function Framies({ onBackToMenu, rsvps = [] }) {
       }
 
       setFramiesData(updatedData)
-      setNominationForm({ awardId: '', nominee: '' })
+      setNominationForm({ awardId: '', nominee: '', rationale: '' })
+      setNominationImage(null)
+      const fileInput = document.getElementById('nomination-image-upload')
+      if (fileInput) {
+        fileInput.value = ''
+      }
       setSubmitMessage({ type: 'success', text: 'Nomination submitted successfully!' })
       setTimeout(() => setSubmitMessage(null), 5000)
+      setShowNominationDialog(false) // Close dialog after successful submission
     } catch (err) {
       logger.error('Error submitting nomination:', err)
       setSubmitMessage({ type: 'error', text: 'Failed to submit nomination. Please try again.' })
@@ -119,6 +217,23 @@ function Framies({ onBackToMenu, rsvps = [] }) {
 
   const handleVote = async (nominationId) => {
     try {
+      // Check if voting is locked
+      if (framiesVotingLocked) {
+        setSubmitMessage({ type: 'error', text: 'Framies voting is currently locked. Please contact the administrator.' })
+        setTimeout(() => setSubmitMessage(null), 5000)
+        return
+      }
+      
+      // Check if email is provided
+      const email = localStorage.getItem('framies_voter_email')
+      if (!email || !email.trim() || !validateEmail(email)) {
+        // Open email registration dialog instead of showing error
+        setShowEmailDialog(true)
+        setSubmitMessage({ type: 'error', text: 'Please register your email address to vote.' })
+        setTimeout(() => setSubmitMessage(null), 5000)
+        return
+      }
+
       // Get or create a persistent voter ID using localStorage
       let voterId = localStorage.getItem('framies_voter_id')
       if (!voterId) {
@@ -126,31 +241,63 @@ function Framies({ onBackToMenu, rsvps = [] }) {
         localStorage.setItem('framies_voter_id', voterId)
       }
       
-      // Check if this voter has already voted for this nomination
-      const existingVote = (framiesData.votes || []).find(
-        v => v.nominationId === nominationId && v.voterId === voterId
-      )
-
-      if (existingVote) {
-        setSubmitMessage({ type: 'error', text: 'You have already voted for this nomination.' })
+      // Find the nomination being voted on to get its award category
+      const nomination = (framiesData.nominations || []).find(n => n.id === nominationId)
+      if (!nomination) {
+        setSubmitMessage({ type: 'error', text: 'Nomination not found.' })
         setTimeout(() => setSubmitMessage(null), 5000)
         return
       }
+
+      const awardId = nomination.awardId
+      
+      // Get all nominations in this award category
+      const categoryNominations = getNominationsForAward(awardId)
+      const categoryNominationIds = categoryNominations.map(n => n.id)
+      
+      // Remove any existing votes this voter has for nominations in this category
+      const existingVotes = (framiesData.votes || []).filter(
+        v => v.voterId === voterId && categoryNominationIds.includes(v.nominationId)
+      )
+
+      // Check if user is voting for the same nomination they already voted for
+      const isVotingSame = existingVotes.some(v => v.nominationId === nominationId)
+      
+      if (isVotingSame) {
+        // Remove the vote (allow unvoting)
+        const updatedVotes = (framiesData.votes || []).filter(
+          v => !(v.nominationId === nominationId && v.voterId === voterId)
+        )
+        const updatedData = {
+          nominations: framiesData.nominations || [],
+          votes: updatedVotes
+        }
+        setFramiesData(updatedData)
+        setSubmitMessage({ type: 'success', text: 'Vote removed!' })
+        setTimeout(() => setSubmitMessage(null), 3000)
+        return
+      }
+
+      // Remove all existing votes in this category, then add the new vote
+      const votesWithoutCategory = (framiesData.votes || []).filter(
+        v => !(v.voterId === voterId && categoryNominationIds.includes(v.nominationId))
+      )
 
       const newVote = {
         id: Date.now().toString(),
         nominationId,
         voterId,
+        voterEmail: email.trim(),
         votedAt: new Date().toISOString()
       }
 
       const updatedData = {
         nominations: framiesData.nominations || [],
-        votes: [...(framiesData.votes || []), newVote]
+        votes: [...votesWithoutCategory, newVote]
       }
 
       setFramiesData(updatedData)
-      setSubmitMessage({ type: 'success', text: 'Vote recorded!' })
+      setSubmitMessage({ type: 'success', text: 'Vote recorded! Your previous vote in this category has been replaced.' })
       setTimeout(() => setSubmitMessage(null), 3000)
     } catch (err) {
       logger.error('Error voting:', err)
@@ -169,6 +316,15 @@ function Framies({ onBackToMenu, rsvps = [] }) {
     return (framiesData.votes || []).filter(v => v.nominationId === nominationId).length
   }
 
+  // Check if current user has voted for a nomination
+  const hasUserVoted = (nominationId) => {
+    const voterId = localStorage.getItem('framies_voter_id')
+    if (!voterId) return false
+    return (framiesData.votes || []).some(
+      v => v.nominationId === nominationId && v.voterId === voterId
+    )
+  }
+
   // Get all votes for nominations in an award (to find winner)
   const getAwardResults = (awardId) => {
     const nominations = getNominationsForAward(awardId)
@@ -178,6 +334,25 @@ function Framies({ onBackToMenu, rsvps = [] }) {
     })).sort((a, b) => b.voteCount - a.voteCount)
   }
 
+  // Handle Escape key to close dialogs
+  useEffect(() => {
+    const handleEscape = (e) => {
+      if (e.key === 'Escape') {
+        if (selectedAward) {
+          setSelectedAward(null)
+        }
+        if (showNominationDialog) {
+          setShowNominationDialog(false)
+        }
+        if (showEmailDialog) {
+          setShowEmailDialog(false)
+        }
+      }
+    }
+    document.addEventListener('keydown', handleEscape)
+    return () => document.removeEventListener('keydown', handleEscape)
+  }, [selectedAward, showNominationDialog, showEmailDialog])
+
   if (loading) {
     return (
       <div className="framies-container">
@@ -185,6 +360,10 @@ function Framies({ onBackToMenu, rsvps = [] }) {
       </div>
     )
   }
+
+  // Check if email is saved in localStorage (not just typed)
+  const savedEmail = localStorage.getItem('framies_voter_email')
+  const hasValidEmail = savedEmail && savedEmail.trim() && validateEmail(savedEmail)
 
   return (
     <div className="framies-container">
@@ -206,65 +385,263 @@ function Framies({ onBackToMenu, rsvps = [] }) {
         </div>
       )}
 
-      <div className="nomination-section">
-        <h3>Make a Nomination</h3>
-        <form onSubmit={handleNominate} className="nomination-form">
-          <div className="form-row">
-            <div className="form-group">
-              <label htmlFor="award-select">Award Category *</label>
-              <select
-                id="award-select"
-                value={nominationForm.awardId}
-                onChange={(e) => setNominationForm({ ...nominationForm, awardId: e.target.value })}
-                required
-              >
-                <option value="">Select an award...</option>
-                {awards.map(award => (
-                  <option key={award.id} value={award.id}>
-                    {award.label}
-                  </option>
-                ))}
-              </select>
-            </div>
+      {framiesNominationsLocked && (
+        <div className="lock-notice">
+          <p>🔒 Framies nominations are currently locked. New nominations cannot be added at this time.</p>
+        </div>
+      )}
+      {framiesVotingLocked && (
+        <div className="lock-notice">
+          <p>🔒 Framies voting is currently locked. Voting is not available at this time.</p>
+        </div>
+      )}
+      <div className="framies-actions">
+        <button 
+          onClick={() => setShowNominationDialog(true)}
+          className="action-button nomination-button"
+          disabled={framiesNominationsLocked}
+        >
+          ➕ Make a Nomination
+        </button>
+        {hasValidEmail ? (
+          <div className="email-status">
+            <span className="email-confirmed-text">✓ {savedEmail}</span>
+            <button 
+              onClick={() => setShowEmailDialog(true)}
+              className="action-button change-email-button"
+            >
+              Change Email
+            </button>
+          </div>
+        ) : (
+          <button 
+            onClick={() => setShowEmailDialog(true)}
+            className="action-button email-button"
+          >
+            📧 Voter Registration
+          </button>
+        )}
+      </div>
 
-            <div className="form-group">
-              <label htmlFor="nominee-input">Nominee Name *</label>
-              <input
-                id="nominee-input"
-                type="text"
-                value={nominationForm.nominee}
-                onChange={(e) => setNominationForm({ ...nominationForm, nominee: e.target.value })}
-                placeholder="Enter nominee name"
-                list="people-list"
-                required
-              />
-              {peopleList.length > 0 && (
-                <datalist id="people-list">
-                  {peopleList.map((name, idx) => (
-                    <option key={idx} value={name} />
-                  ))}
-                </datalist>
-              )}
+      {/* Nomination Dialog */}
+      {showNominationDialog && createPortal(
+        <div 
+          className="dialog-overlay" 
+          onClick={() => setShowNominationDialog(false)}
+        >
+          <div 
+            className="nomination-dialog" 
+            onClick={(e) => e.stopPropagation()}
+          >
+            <div className="nomination-dialog-header">
+              <h3>Make a Nomination</h3>
+              <button
+                className="close-dialog-button"
+                onClick={() => setShowNominationDialog(false)}
+                aria-label="Close dialog"
+              >
+                ×
+              </button>
+            </div>
+            <div className="nomination-dialog-content">
+              <form onSubmit={handleNominate} className="nomination-form">
+                <div className="form-row">
+                  <div className="form-group">
+                    <label htmlFor="award-select">Award Category *</label>
+                    <select
+                      id="award-select"
+                      value={nominationForm.awardId}
+                      onChange={(e) => setNominationForm({ ...nominationForm, awardId: e.target.value })}
+                      required
+                    >
+                      <option value="">Select an award...</option>
+                      {awards.map(award => (
+                        <option key={award.id} value={award.id}>
+                          {award.label}
+                        </option>
+                      ))}
+                    </select>
+                  </div>
+
+                  <div className="form-group">
+                    <label htmlFor="nominee-input">Nominee Name *</label>
+                    <input
+                      id="nominee-input"
+                      type="text"
+                      value={nominationForm.nominee}
+                      onChange={(e) => setNominationForm({ ...nominationForm, nominee: e.target.value })}
+                      placeholder="Enter nominee name"
+                      list="people-list"
+                      required
+                    />
+                    {peopleList.length > 0 && (
+                      <datalist id="people-list">
+                        {peopleList.map((name, idx) => (
+                          <option key={idx} value={name} />
+                        ))}
+                      </datalist>
+                    )}
+                  </div>
+                </div>
+
+                <div className="form-group">
+                  <label htmlFor="rationale-input">Rationale (Optional)</label>
+                  <textarea
+                    id="rationale-input"
+                    value={nominationForm.rationale}
+                    onChange={(e) => setNominationForm({ ...nominationForm, rationale: e.target.value })}
+                    placeholder="Explain why this person deserves this award..."
+                    rows={4}
+                    className="nomination-textarea"
+                  />
+                </div>
+
+                <div className="form-group">
+                  <label htmlFor="nomination-image-upload">Supporting Image (Optional)</label>
+                  {nominationImage ? (
+                    <div className="nomination-image-preview">
+                      <img src={nominationImage} alt="Supporting image" className="preview-image" />
+                      <button
+                        type="button"
+                        onClick={handleRemoveImage}
+                        className="remove-image-button"
+                      >
+                        Remove Image
+                      </button>
+                    </div>
+                  ) : (
+                    <label htmlFor="nomination-image-upload" className="image-upload-label">
+                      <input
+                        type="file"
+                        id="nomination-image-upload"
+                        accept="image/*"
+                        onChange={handleImageSelect}
+                        style={{ display: 'none' }}
+                      />
+                      <span className="upload-button">📷 Upload Supporting Image</span>
+                    </label>
+                  )}
+                  <p className="form-help">Upload an image to support your nomination (max 5MB)</p>
+                </div>
+
+                {showImageCropper && nominationImageFile && (
+                  <ImageCropper
+                    imageFile={nominationImageFile}
+                    onCropComplete={handleCropComplete}
+                    onCancel={handleCancelCrop}
+                  />
+                )}
+
+                <button type="submit" className="submit-button" disabled={submitting}>
+                  {submitting ? 'Submitting...' : 'Submit Nomination'}
+                </button>
+              </form>
             </div>
           </div>
+        </div>,
+        document.body
+      )}
 
-          <button type="submit" className="submit-button" disabled={submitting}>
-            {submitting ? 'Submitting...' : 'Submit Nomination'}
-          </button>
-        </form>
-      </div>
+      {/* Email Dialog */}
+      {showEmailDialog && createPortal(
+        <div 
+          className="dialog-overlay" 
+          onClick={() => setShowEmailDialog(false)}
+        >
+          <div 
+            className="email-dialog" 
+            onClick={(e) => e.stopPropagation()}
+          >
+            <div className="email-dialog-header">
+              <h3>Voter Registration</h3>
+              <button
+                className="close-dialog-button"
+                onClick={() => setShowEmailDialog(false)}
+                aria-label="Close dialog"
+              >
+                ×
+              </button>
+            </div>
+            <div className="email-dialog-content">
+              <p className="email-section-description">
+                Please provide your email address to vote for nominations.
+              </p>
+              <form onSubmit={handleEmailSubmit} className="email-form">
+                <div className="form-group">
+                  <label htmlFor="voter-email">Email Address *</label>
+                  <input
+                    id="voter-email"
+                    type="email"
+                    value={voterEmail}
+                    onChange={(e) => setVoterEmail(e.target.value)}
+                    placeholder="your.email@example.com"
+                    required
+                  />
+                </div>
+                <button type="submit" className="submit-button">
+                  Save Email
+                </button>
+              </form>
+            </div>
+          </div>
+        </div>,
+        document.body
+      )}
 
       <div className="awards-section">
         <h3>Award Categories</h3>
         <div className="awards-grid">
           {awards.map(award => {
-            const results = getAwardResults(award.id)
             return (
-              <div key={award.id} className="award-card">
+              <div 
+                key={award.id} 
+                className="award-card clickable"
+                onClick={() => setSelectedAward(award.id)}
+                role="button"
+                tabIndex={0}
+                onKeyDown={(e) => {
+                  if (e.key === 'Enter' || e.key === ' ') {
+                    e.preventDefault()
+                    setSelectedAward(award.id)
+                  }
+                }}
+              >
                 <div className="award-header">
                   <h4>{award.label}</h4>
                 </div>
+                <div className="award-summary">
+                  <p className="award-description">{award.description || 'Click to view nominations and vote!'}</p>
+                </div>
+              </div>
+            )
+          })}
+        </div>
+      </div>
 
+      {/* Award Dialog */}
+      {selectedAward && (() => {
+        const award = awards.find(a => a.id === selectedAward)
+        const results = getAwardResults(selectedAward)
+        return createPortal(
+          <div 
+            className="dialog-overlay" 
+            onClick={() => setSelectedAward(null)}
+          >
+            <div 
+              className="award-dialog" 
+              onClick={(e) => e.stopPropagation()}
+            >
+              <div className="award-dialog-header">
+                <h3>{award?.label || 'Award Category'}</h3>
+                <button
+                  className="close-dialog-button"
+                  onClick={() => setSelectedAward(null)}
+                  aria-label="Close dialog"
+                >
+                  ×
+                </button>
+              </div>
+              <div className="award-dialog-content">
                 {results.length === 0 ? (
                   <p className="no-nominations">No nominations yet. Be the first to nominate someone!</p>
                 ) : (
@@ -272,25 +649,46 @@ function Framies({ onBackToMenu, rsvps = [] }) {
                     {results.map((nomination) => (
                       <div key={nomination.id} className="nomination-item">
                         <div className="nomination-info">
-                          <span className="nominee-name">{nomination.nominee}</span>
-                          <span className="vote-count">{nomination.voteCount} vote{nomination.voteCount !== 1 ? 's' : ''}</span>
+                          <div className="nomination-header">
+                            <span className="nominee-name">{nomination.nominee}</span>
+                          </div>
+                          {nomination.rationale && (
+                            <p className="nomination-rationale">{nomination.rationale}</p>
+                          )}
+                          {nomination.supportingImage && (
+                            <div className="nomination-image-container">
+                              <img 
+                                src={nomination.supportingImage} 
+                                alt={`Supporting image for ${nomination.nominee}`}
+                                className="nomination-supporting-image"
+                              />
+                            </div>
+                          )}
                         </div>
                         <button
                           onClick={() => handleVote(nomination.id)}
-                          className="vote-button"
-                          title="Vote for this nomination"
+                          className={`vote-button ${hasUserVoted(nomination.id) ? 'voted' : ''}`}
+                          disabled={framiesVotingLocked}
+                          title={
+                            framiesVotingLocked
+                              ? 'Voting is currently locked'
+                              : hasUserVoted(nomination.id) 
+                              ? 'Click to remove your vote' 
+                              : 'Vote for this nomination'
+                          }
                         >
-                          👍 Vote
+                          {framiesVotingLocked ? '🔒 Locked' : hasUserVoted(nomination.id) ? '✓ Voted' : '👍 Vote'}
                         </button>
                       </div>
                     ))}
                   </div>
                 )}
               </div>
-            )
-          })}
-        </div>
-      </div>
+            </div>
+          </div>,
+          document.body
+        )
+      })()}
     </div>
   )
 }

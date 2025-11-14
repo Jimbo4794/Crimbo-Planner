@@ -5,8 +5,20 @@ const API_BASE = '/api';
 // Helper function to handle API responses
 const handleResponse = async (response) => {
   if (!response.ok) {
-    const error = await response.json().catch(() => ({ error: 'Unknown error' }));
-    throw new Error(error.error || `HTTP error! status: ${response.status}`);
+    let errorMessage = `HTTP error! status: ${response.status}`;
+    try {
+      const error = await response.json();
+      errorMessage = error.error || errorMessage;
+    } catch (e) {
+      // If response is not JSON, try to get text
+      try {
+        const text = await response.text();
+        errorMessage = text || errorMessage;
+      } catch (e2) {
+        // Fallback to default message
+      }
+    }
+    throw new Error(errorMessage);
   }
   return response.json();
 };
@@ -52,13 +64,13 @@ export const fetchConfig = async () => {
   return handleResponse(response);
 };
 
-export const saveConfig = async (tablesCount, seatsPerTable, tablePositions = null, customAreas = null, gridCols = null, gridRows = null, tableDisplayNames = null, rsvpLocked = null, seatingLocked = null) => {
+export const saveConfig = async (tablesCount, seatsPerTable, tablePositions = null, customAreas = null, gridCols = null, gridRows = null, tableDisplayNames = null, rsvpLocked = null, seatingLocked = null, framiesNominationsLocked = null, framiesVotingLocked = null) => {
   const response = await fetch(`${API_BASE}/config`, {
     method: 'PUT',
     headers: {
       'Content-Type': 'application/json',
     },
-    body: JSON.stringify({ tablesCount, seatsPerTable, tablePositions, customAreas, gridCols, gridRows, tableDisplayNames, rsvpLocked, seatingLocked }),
+    body: JSON.stringify({ tablesCount, seatsPerTable, tablePositions, customAreas, gridCols, gridRows, tableDisplayNames, rsvpLocked, seatingLocked, framiesNominationsLocked, framiesVotingLocked }),
   });
   return handleResponse(response);
 };
@@ -203,6 +215,44 @@ export const saveAwards = async (awards) => {
       'Content-Type': 'application/json',
     },
     body: JSON.stringify({ awards }),
+  });
+  return handleResponse(response);
+};
+
+// Background Images API
+export const fetchBackgroundImages = async () => {
+  try {
+    const response = await fetch(`${API_BASE}/background-images`);
+    const data = await handleResponse(response);
+    return Array.isArray(data) ? data : [];
+  } catch (error) {
+    // If file doesn't exist yet, return empty array
+    if (error.message.includes('404') || error.message.includes('Failed to read')) {
+      return [];
+    }
+    throw error;
+  }
+};
+
+export const addBackgroundImage = async (imageData, sessionId) => {
+  const response = await fetch(`${API_BASE}/background-images`, {
+    method: 'POST',
+    headers: {
+      'Content-Type': 'application/json',
+      'x-admin-session': sessionId,
+    },
+    body: JSON.stringify({ imageData }),
+  });
+  return handleResponse(response);
+};
+
+export const deleteBackgroundImage = async (imageId, sessionId) => {
+  const response = await fetch(`${API_BASE}/background-images/${imageId}`, {
+    method: 'DELETE',
+    headers: {
+      'Content-Type': 'application/json',
+      'x-admin-session': sessionId,
+    },
   });
   return handleResponse(response);
 };
