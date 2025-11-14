@@ -2,10 +2,11 @@ import { useState, useEffect, useRef, useMemo } from 'react'
 import { createPortal } from 'react-dom'
 import './SeatSelection.css'
 import { conflictsWithDietaryPreferences } from '../utils/dietaryConflicts'
-import { AUTO_SIGNIN_TIMEOUT } from '../utils/constants'
+import { AUTO_SIGNIN_TIMEOUT, AVAILABLE_ICONS, MAX_IMAGE_SIZE } from '../utils/constants'
+import ImageCropper from './ImageCropper'
 import logger from '../utils/logger'
 
-function SeatSelection({ rsvps, pendingRSVPId = null, onPendingRSVPProcessed = null, tablesCount = 5, seatsPerTable = 8, tablePositions = null, customAreas = null, gridCols = 12, gridRows = 8, tableDisplayNames = null, seatingLocked = false, onSeatSelect, onChangeSeat, onUpdateMenuChoices, onUpdateDietaryRequirements, onUpdateDietaryPreferences, onBackToMenu, onNavigate, menuCategories = [] }) {
+function SeatSelection({ rsvps, pendingRSVPId = null, onPendingRSVPProcessed = null, tablesCount = 5, seatsPerTable = 8, tablePositions = null, customAreas = null, gridCols = 12, gridRows = 8, tableDisplayNames = null, seatingLocked = false, onSeatSelect, onChangeSeat, onUpdateMenuChoices, onUpdateDietaryRequirements, onUpdateDietaryPreferences, onUpdateIcon, onBackToMenu, onNavigate, menuCategories = [] }) {
   const [lookupEmail, setLookupEmail] = useState('')
   const [lookupError, setLookupError] = useState('')
   const [foundRSVP, setFoundRSVP] = useState(null)
@@ -21,6 +22,11 @@ function SeatSelection({ rsvps, pendingRSVPId = null, onPendingRSVPProcessed = n
   const [tempGlutenIntolerant, setTempGlutenIntolerant] = useState(false)
   const [tempLactoseIntolerant, setTempLactoseIntolerant] = useState(false)
   const [menuErrors, setMenuErrors] = useState({})
+  const [editingIcon, setEditingIcon] = useState(false)
+  const [tempIcon, setTempIcon] = useState('🎄')
+  const [tempIconType, setTempIconType] = useState('emoji')
+  const [tempImageFile, setTempImageFile] = useState(null)
+  const [showIconCropper, setShowIconCropper] = useState(false)
   const menuChoicesRef = useRef([])
   
   // Keep ref in sync with state
@@ -191,6 +197,9 @@ function SeatSelection({ rsvps, pendingRSVPId = null, onPendingRSVPProcessed = n
     setLookupError('')
     setShowLookupDialog(false) // Close dialog on successful lookup
     setLookupEmail('') // Clear email field
+    setExpandedTable(null) // Close any open table dialog
+    // Scroll to top of page
+    window.scrollTo({ top: 0, behavior: 'smooth' })
   }
 
   const handleSignOut = () => {
@@ -422,6 +431,77 @@ function SeatSelection({ rsvps, pendingRSVPId = null, onPendingRSVPProcessed = n
   const handleCancelEditDietary = () => {
     setEditingDietary(false)
     setTempDietaryRequirements('')
+  }
+
+  const handleStartEditIcon = () => {
+    if (currentUser) {
+      setTempIcon(currentUser.icon || '🎄')
+      setTempIconType(currentUser.iconType || 'emoji')
+      setEditingIcon(true)
+    }
+  }
+
+  const handleIconImageSelect = (e) => {
+    const file = e.target.files[0]
+    if (file) {
+      if (!file.type.startsWith('image/')) {
+        alert('Please select a valid image file')
+        return
+      }
+      if (file.size > MAX_IMAGE_SIZE) {
+        alert('Image size must be less than 5MB')
+        return
+      }
+      setTempImageFile(file)
+      setShowIconCropper(true)
+      setTempIconType('image')
+    }
+  }
+
+  const handleIconCropComplete = (croppedImage) => {
+    setTempIcon(croppedImage)
+    setShowIconCropper(false)
+    setTempImageFile(null)
+  }
+
+  const handleCancelIconCrop = () => {
+    setShowIconCropper(false)
+    setTempImageFile(null)
+    if (tempIconType === 'image' && !tempIcon.startsWith('data:')) {
+      setTempIconType('emoji')
+      setTempIcon('🎄')
+    }
+  }
+
+  const handleRemoveIconImage = () => {
+    setTempIcon('🎄')
+    setTempIconType('emoji')
+  }
+
+  const handleIconTypeChange = (type) => {
+    setTempIconType(type)
+    if (type === 'emoji' && !tempIcon || tempIcon.startsWith('data:')) {
+      setTempIcon('🎄')
+    }
+  }
+
+  const handleSaveIcon = () => {
+    if (currentUser && onUpdateIcon) {
+      onUpdateIcon(currentUser.email, tempIcon, tempIconType)
+      // Update foundRSVP to reflect the change
+      setFoundRSVP({ ...foundRSVP, icon: tempIcon, iconType: tempIconType })
+      setEditingIcon(false)
+    }
+  }
+
+  const handleCancelEditIcon = () => {
+    setEditingIcon(false)
+    if (currentUser) {
+      setTempIcon(currentUser.icon || '🎄')
+      setTempIconType(currentUser.iconType || 'emoji')
+    }
+    setTempImageFile(null)
+    setShowIconCropper(false)
   }
 
   const renderTableInDialog = (tableNumber) => {
@@ -829,6 +909,105 @@ function SeatSelection({ rsvps, pendingRSVPId = null, onPendingRSVPProcessed = n
               </div>
             )}
 
+            {!editingIcon ? (
+              <div className="icon-section">
+                <div className="icon-header">
+                  <p className="icon-summary">
+                    <strong>Your Icon:</strong>{' '}
+                    {currentUser.iconType === 'image' && currentUser.icon ? (
+                      <img src={currentUser.icon} alt="Your icon" className="icon-preview-image" style={{ width: '32px', height: '32px', borderRadius: '50%', verticalAlign: 'middle', marginLeft: '8px' }} />
+                    ) : (
+                      <span style={{ fontSize: '1.5em', marginLeft: '8px' }}>{currentUser.icon || '🎄'}</span>
+                    )}
+                  </p>
+                  <button onClick={handleStartEditIcon} className="edit-icon-button">
+                    Edit Icon
+                  </button>
+                </div>
+              </div>
+            ) : (
+              <div className="edit-icon-section">
+                <h4>Edit Your Icon</h4>
+                <p className="icon-edit-description">Select an emoji icon or upload your own image:</p>
+                
+                <div className="form-group">
+                  <div className="icon-type-selector">
+                    <button
+                      type="button"
+                      className={`icon-type-button ${tempIconType === 'emoji' ? 'active' : ''}`}
+                      onClick={() => handleIconTypeChange('emoji')}
+                    >
+                      Emoji Icon
+                    </button>
+                    <button
+                      type="button"
+                      className={`icon-type-button ${tempIconType === 'image' ? 'active' : ''}`}
+                      onClick={() => handleIconTypeChange('image')}
+                    >
+                      Upload Image
+                    </button>
+                  </div>
+
+                  {tempIconType === 'emoji' && (
+                    <>
+                      <div className="icon-selection">
+                        {AVAILABLE_ICONS.map((icon, index) => (
+                          <button
+                            key={index}
+                            type="button"
+                            className={`icon-option ${tempIcon === icon ? 'selected' : ''}`}
+                            onClick={() => setTempIcon(icon)}
+                            title={`Select ${icon}`}
+                          >
+                            {icon}
+                          </button>
+                        ))}
+                      </div>
+                      <p className="field-hint">Your selected icon: {tempIcon} - This will appear on your seat in the seating plan.</p>
+                    </>
+                  )}
+
+                  {tempIconType === 'image' && (
+                    <>
+                      <div className="image-upload-section">
+                        {tempIcon && tempIcon.startsWith('data:') ? (
+                          <div className="selected-image-preview">
+                            <img src={tempIcon} alt="Selected" className="preview-image" />
+                            <button type="button" onClick={handleRemoveIconImage} className="remove-image-button">
+                              Remove Image
+                            </button>
+                          </div>
+                        ) : (
+                          <label htmlFor="icon-image-upload" className="image-upload-label">
+                            <input
+                              type="file"
+                              id="icon-image-upload"
+                              accept="image/*"
+                              onChange={handleIconImageSelect}
+                              style={{ display: 'none' }}
+                            />
+                            <span className="upload-button">📷 Upload Image</span>
+                          </label>
+                        )}
+                      </div>
+                      <p className="field-hint">
+                        Upload a square image. It will be cropped to a circular shape for your seat icon.
+                      </p>
+                    </>
+                  )}
+                </div>
+
+                <div className="icon-edit-actions">
+                  <button onClick={handleCancelEditIcon} className="cancel-edit-button">
+                    Cancel
+                  </button>
+                  <button onClick={handleSaveIcon} className="save-icon-button">
+                    Save Changes
+                  </button>
+                </div>
+              </div>
+            )}
+
             {isSignedIn && currentUser && currentUser.seat && (
               <>
                 <p className="change-seat-instruction">Select a new seat below to change your reservation:</p>
@@ -897,6 +1076,13 @@ function SeatSelection({ rsvps, pendingRSVPId = null, onPendingRSVPProcessed = n
       {/* Render dialogs using portals to document body */}
       {lookupDialogContent && createPortal(lookupDialogContent, document.body)}
       {tableDialogContent && createPortal(tableDialogContent, document.body)}
+      {showIconCropper && tempImageFile && (
+        <ImageCropper
+          imageFile={tempImageFile}
+          onCropComplete={handleIconCropComplete}
+          onCancel={handleCancelIconCrop}
+        />
+      )}
     </>
   )
 }

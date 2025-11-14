@@ -1,7 +1,7 @@
 import { useState, useEffect } from 'react'
 import './Admin.css'
 import ImageCropper from './ImageCropper'
-import { AVAILABLE_ICONS, MAX_IMAGE_SIZE } from '../utils/constants'
+import { AVAILABLE_ICONS, MAX_IMAGE_SIZE, MAX_BACKGROUND_IMAGE_SIZE } from '../utils/constants'
 import { saveEventDetails, fetchFeedback, deleteFeedback, adminLogin, adminLogout, checkAdminSession, createManualBackup, fetchAwards, saveAwards, fetchFramies, fetchBackgroundImages, addBackgroundImage, deleteBackgroundImage } from '../api'
 import { getSocket } from '../utils/websocket'
 import logger from '../utils/logger'
@@ -2484,9 +2484,9 @@ function BackgroundImageManagement({ adminSessionId }) {
       return
     }
 
-    const oversizedFiles = files.filter(file => file.size > MAX_IMAGE_SIZE)
+    const oversizedFiles = files.filter(file => file.size > MAX_BACKGROUND_IMAGE_SIZE)
     if (oversizedFiles.length > 0) {
-      setMessage({ type: 'error', text: `Some images are too large. ${oversizedFiles.length} file(s) exceed 5MB limit.` })
+      setMessage({ type: 'error', text: `Some images are too large. ${oversizedFiles.length} file(s) exceed 10MB limit.` })
       setTimeout(() => setMessage(null), 5000)
       e.target.value = ''
       return
@@ -2606,7 +2606,7 @@ function BackgroundImageManagement({ adminSessionId }) {
             {uploading ? '⏳ Uploading...' : '📷 Upload Images'}
           </span>
         </label>
-        <p className="form-help">Upload one or more images to add to the background mosaic catalog (max 5MB per image). Images are automatically compressed and resized to optimize loading times.</p>
+        <p className="form-help">Upload one or more images to add to the background mosaic catalog (max 10MB per image). Images are automatically compressed and resized to optimize loading times.</p>
       </div>
 
       <div className="background-images-list">

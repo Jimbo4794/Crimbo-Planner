@@ -117,5 +117,7 @@
   "tableDisplayNames": null,
   "_version": 3886,
   "rsvpLocked": false,
-  "seatingLocked": false
+  "seatingLocked": false,
+  "framiesNominationsLocked": false,
+  "framiesVotingLocked": false
 }

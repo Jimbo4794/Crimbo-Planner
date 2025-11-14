@@ -428,6 +428,26 @@ function App() {
     // API will be updated automatically via useEffect
   }
 
+  const handleUpdateIcon = (email, icon, iconType) => {
+    // Find the RSVP by email (case-insensitive)
+    const rsvpIndex = rsvps.findIndex(r => r.email.toLowerCase() === email.toLowerCase())
+    
+    if (rsvpIndex === -1) {
+      alert('Reservation not found!')
+      return
+    }
+
+    // Update the RSVP with new icon
+    const updatedRSVPs = rsvps.map((r, index) => 
+      index === rsvpIndex
+        ? { ...r, icon: icon, iconType: iconType }
+        : r
+    )
+    
+    setRsvps(updatedRSVPs)
+    // API will be updated automatically via useEffect
+  }
+
   const handleBackToMenu = () => {
     setCurrentStep('menu')
   }
@@ -648,6 +668,7 @@ function App() {
             onUpdateMenuChoices={handleUpdateMenuChoices}
             onUpdateDietaryRequirements={handleUpdateDietaryRequirements}
             onUpdateDietaryPreferences={handleUpdateDietaryPreferences}
+            onUpdateIcon={handleUpdateIcon}
             onBackToMenu={handleBackToMenu}
             onNavigate={handleNavigate}
             menuCategories={menuCategories}
