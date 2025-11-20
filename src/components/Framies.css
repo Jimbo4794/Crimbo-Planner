@@ -338,6 +338,29 @@
   object-fit: contain;
 }
 
+.image-preview-buttons {
+  display: flex;
+  gap: 0.5rem;
+  flex-wrap: wrap;
+}
+
+.crop-image-button {
+  background: rgba(59, 130, 246, 0.2);
+  color: var(--primary-color);
+  border: 1px solid var(--primary-color);
+  padding: 0.5rem 1rem;
+  border-radius: var(--radius);
+  font-size: 0.875rem;
+  font-weight: 500;
+  cursor: pointer;
+  transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+}
+
+.crop-image-button:hover {
+  background: rgba(59, 130, 246, 0.3);
+  box-shadow: 0 0 15px var(--primary-glow);
+}
+
 .remove-image-button {
   background: rgba(239, 68, 68, 0.2);
   color: #ef4444;
@@ -348,7 +371,6 @@
   font-weight: 500;
   cursor: pointer;
   transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
-  align-self: flex-start;
 }
 
 .remove-image-button:hover {

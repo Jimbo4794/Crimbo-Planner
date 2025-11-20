@@ -132,7 +132,18 @@ function Framies({ onBackToMenu, rsvps = [], framiesNominationsLocked = false, f
         setTimeout(() => setSubmitMessage(null), 5000)
         return
       }
-      setNominationImageFile(file)
+      // Use original image by default
+      const reader = new FileReader()
+      reader.onload = (e) => {
+        setNominationImage(e.target.result)
+        setNominationImageFile(file) // Keep the file for potential cropping later
+      }
+      reader.readAsDataURL(file)
+    }
+  }
+
+  const handleStartCrop = () => {
+    if (nominationImageFile) {
       setShowImageCropper(true)
     }
   }
@@ -140,23 +151,17 @@ function Framies({ onBackToMenu, rsvps = [], framiesNominationsLocked = false, f
   const handleCropComplete = (croppedImage) => {
     setNominationImage(croppedImage)
     setShowImageCropper(false)
-    setNominationImageFile(null)
+    // Keep nominationImageFile in case user wants to crop again
   }
 
   const handleCancelCrop = () => {
     setShowImageCropper(false)
-    setNominationImageFile(null)
-    if (!nominationImage) {
-      // Reset file input
-      const fileInput = document.getElementById('nomination-image-upload')
-      if (fileInput) {
-        fileInput.value = ''
-      }
-    }
+    // Keep the original image and file when cancelling crop
   }
 
   const handleRemoveImage = () => {
     setNominationImage(null)
+    setNominationImageFile(null)
     const fileInput = document.getElementById('nomination-image-upload')
     if (fileInput) {
       fileInput.value = ''
@@ -199,6 +204,7 @@ function Framies({ onBackToMenu, rsvps = [], framiesNominationsLocked = false, f
       setFramiesData(updatedData)
       setNominationForm({ awardId: '', nominee: '', rationale: '' })
       setNominationImage(null)
+      setNominationImageFile(null)
       const fileInput = document.getElementById('nomination-image-upload')
       if (fileInput) {
         fileInput.value = ''
@@ -501,13 +507,22 @@ function Framies({ onBackToMenu, rsvps = [], framiesNominationsLocked = false, f
                   {nominationImage ? (
                     <div className="nomination-image-preview">
                       <img src={nominationImage} alt="Supporting image" className="preview-image" />
-                      <button
-                        type="button"
-                        onClick={handleRemoveImage}
-                        className="remove-image-button"
-                      >
-                        Remove Image
-                      </button>
+                      <div className="image-preview-buttons">
+                        <button
+                          type="button"
+                          onClick={handleStartCrop}
+                          className="crop-image-button"
+                        >
+                          ✂️ Crop Image
+                        </button>
+                        <button
+                          type="button"
+                          onClick={handleRemoveImage}
+                          className="remove-image-button"
+                        >
+                          Remove Image
+                        </button>
+                      </div>
                     </div>
                   ) : (
                     <label htmlFor="nomination-image-upload" className="image-upload-label">

@@ -2,7 +2,7 @@ import { useState, useEffect } from 'react'
 import './Admin.css'
 import ImageCropper from './ImageCropper'
 import { AVAILABLE_ICONS, MAX_IMAGE_SIZE, MAX_BACKGROUND_IMAGE_SIZE } from '../utils/constants'
-import { saveEventDetails, fetchFeedback, deleteFeedback, adminLogin, adminLogout, checkAdminSession, createManualBackup, fetchAwards, saveAwards, fetchFramies, fetchBackgroundImages, addBackgroundImage, deleteBackgroundImage } from '../api'
+import { saveEventDetails, fetchFeedback, deleteFeedback, adminLogin, adminLogout, checkAdminSession, createManualBackup, fetchAwards, saveAwards, fetchFramies, saveFramies, fetchBackgroundImages, addBackgroundImage, deleteBackgroundImage } from '../api'
 import { getSocket } from '../utils/websocket'
 import logger from '../utils/logger'
 
@@ -1576,6 +1576,37 @@ function AwardManagement() {
     }
   }
 
+  const handleRemoveNomination = async (nominationId) => {
+    if (!window.confirm('Are you sure you want to remove this nomination? This will also remove all votes for this nomination.')) {
+      return
+    }
+
+    try {
+      setSaving(true)
+      setMessage(null)
+      
+      // Remove the nomination and all associated votes
+      const updatedNominations = (framiesData.nominations || []).filter(n => n.id !== nominationId)
+      const updatedVotes = (framiesData.votes || []).filter(v => v.nominationId !== nominationId)
+      
+      const updatedFramiesData = {
+        nominations: updatedNominations,
+        votes: updatedVotes
+      }
+      
+      await saveFramies(updatedFramiesData)
+      setFramiesData(updatedFramiesData)
+      setMessage({ type: 'success', text: 'Nomination removed successfully!' })
+      setTimeout(() => setMessage(null), 3000)
+    } catch (error) {
+      logger.error('Error removing nomination:', error)
+      setMessage({ type: 'error', text: error.message || 'Failed to remove nomination' })
+      setTimeout(() => setMessage(null), 5000)
+    } finally {
+      setSaving(false)
+    }
+  }
+
   const handleAddAward = () => {
     if (!newAwardName.trim()) {
       setMessage({ type: 'error', text: 'Please enter an award name' })
@@ -1644,90 +1675,443 @@ function AwardManagement() {
   }
 
   const handleExportVotingData = () => {
-    const csvRows = []
+    const reportDate = new Date().toLocaleDateString('en-US', { 
+      year: 'numeric', 
+      month: 'long', 
+      day: 'numeric',
+      hour: '2-digit',
+      minute: '2-digit'
+    })
+
+    // Build HTML report
+    let htmlContent = `<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Framies Voting Report - ${reportDate}</title>
+  <style>
+    * {
+      margin: 0;
+      padding: 0;
+      box-sizing: border-box;
+    }
+    body {
+      font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif;
+      line-height: 1.6;
+      color: #1e293b;
+      background: #f8fafc;
+      padding: 2rem;
+    }
+    .report-container {
+      max-width: 1200px;
+      margin: 0 auto;
+      background: white;
+      box-shadow: 0 4px 6px rgba(0, 0, 0, 0.1);
+      border-radius: 8px;
+      overflow: hidden;
+    }
+    .report-header {
+      background: linear-gradient(135deg, #3b82f6 0%, #2563eb 100%);
+      color: white;
+      padding: 2rem;
+      text-align: center;
+    }
+    .report-header h1 {
+      font-size: 2rem;
+      margin-bottom: 0.5rem;
+      font-weight: 700;
+    }
+    .report-header .subtitle {
+      font-size: 1rem;
+      opacity: 0.9;
+    }
+    .report-meta {
+      padding: 1.5rem 2rem;
+      background: #f1f5f9;
+      border-bottom: 2px solid #e2e8f0;
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      flex-wrap: wrap;
+      gap: 1rem;
+    }
+    .report-meta-item {
+      display: flex;
+      align-items: center;
+      gap: 0.5rem;
+      font-size: 0.875rem;
+      color: #475569;
+    }
+    .report-meta-item strong {
+      color: #1e293b;
+    }
+    .section {
+      padding: 2rem;
+      border-bottom: 1px solid #e2e8f0;
+    }
+    .section:last-child {
+      border-bottom: none;
+    }
+    .section-title {
+      font-size: 1.5rem;
+      font-weight: 600;
+      color: #1e293b;
+      margin-bottom: 1.5rem;
+      padding-bottom: 0.75rem;
+      border-bottom: 2px solid #3b82f6;
+    }
+    .winners-grid {
+      display: grid;
+      grid-template-columns: repeat(auto-fit, minmax(300px, 1fr));
+      gap: 1.5rem;
+      margin-bottom: 2rem;
+    }
+    .winner-card {
+      background: linear-gradient(135deg, #fef3c7 0%, #fde68a 100%);
+      border: 2px solid #fbbf24;
+      border-radius: 8px;
+      padding: 1.5rem;
+      position: relative;
+    }
+    .winner-card::before {
+      content: '🏆';
+      position: absolute;
+      top: -15px;
+      right: 15px;
+      font-size: 2rem;
+      background: white;
+      width: 50px;
+      height: 50px;
+      border-radius: 50%;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      box-shadow: 0 2px 4px rgba(0, 0, 0, 0.1);
+    }
+    .winner-award {
+      font-size: 0.875rem;
+      color: #92400e;
+      font-weight: 600;
+      text-transform: uppercase;
+      letter-spacing: 0.5px;
+      margin-bottom: 0.5rem;
+    }
+    .winner-name {
+      font-size: 1.5rem;
+      font-weight: 700;
+      color: #78350f;
+      margin-bottom: 0.75rem;
+    }
+    .winner-votes {
+      display: inline-block;
+      background: #3b82f6;
+      color: white;
+      padding: 0.25rem 0.75rem;
+      border-radius: 20px;
+      font-size: 0.875rem;
+      font-weight: 600;
+      margin-bottom: 0.75rem;
+    }
+    .winner-rationale {
+      color: #78350f;
+      font-style: italic;
+      font-size: 0.9375rem;
+      line-height: 1.5;
+    }
+    .award-section {
+      margin-bottom: 3rem;
+    }
+    .award-header {
+      background: #f1f5f9;
+      padding: 1rem 1.5rem;
+      border-radius: 8px 8px 0 0;
+      border-bottom: 2px solid #3b82f6;
+    }
+    .award-title {
+      font-size: 1.25rem;
+      font-weight: 600;
+      color: #1e293b;
+      margin-bottom: 0.25rem;
+    }
+    .award-description {
+      color: #64748b;
+      font-size: 0.875rem;
+    }
+    .award-stats {
+      display: flex;
+      gap: 1.5rem;
+      padding: 1rem 1.5rem;
+      background: #f8fafc;
+      border-bottom: 1px solid #e2e8f0;
+      font-size: 0.875rem;
+    }
+    .award-stat {
+      display: flex;
+      flex-direction: column;
+    }
+    .award-stat-label {
+      color: #64748b;
+      font-size: 0.75rem;
+      text-transform: uppercase;
+      letter-spacing: 0.5px;
+    }
+    .award-stat-value {
+      color: #3b82f6;
+      font-weight: 600;
+      font-size: 1.125rem;
+      margin-top: 0.25rem;
+    }
+    .nominations-list {
+      padding: 1.5rem;
+      background: white;
+    }
+    .nomination-item {
+      background: #f8fafc;
+      border: 1px solid #e2e8f0;
+      border-radius: 8px;
+      padding: 1.5rem;
+      margin-bottom: 1rem;
+      display: flex;
+      gap: 1.5rem;
+    }
+    .nomination-item:last-child {
+      margin-bottom: 0;
+    }
+    .nomination-rank {
+      background: #3b82f6;
+      color: white;
+      font-weight: 700;
+      font-size: 1.25rem;
+      width: 50px;
+      height: 50px;
+      border-radius: 8px;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      flex-shrink: 0;
+    }
+    .nomination-content {
+      flex: 1;
+    }
+    .nomination-header {
+      display: flex;
+      align-items: center;
+      gap: 1rem;
+      margin-bottom: 0.75rem;
+      flex-wrap: wrap;
+    }
+    .nomination-name {
+      font-size: 1.25rem;
+      font-weight: 600;
+      color: #1e293b;
+    }
+    .nomination-votes {
+      background: #dbeafe;
+      color: #1e40af;
+      padding: 0.25rem 0.75rem;
+      border-radius: 20px;
+      font-size: 0.875rem;
+      font-weight: 600;
+    }
+    .nomination-rationale {
+      color: #475569;
+      font-style: italic;
+      margin-bottom: 0.75rem;
+      line-height: 1.6;
+    }
+    .nomination-image {
+      max-width: 200px;
+      max-height: 200px;
+      border-radius: 8px;
+      border: 2px solid #e2e8f0;
+      object-fit: contain;
+      background: #f8fafc;
+    }
+    .nomination-meta {
+      display: flex;
+      gap: 1rem;
+      flex-wrap: wrap;
+      font-size: 0.8125rem;
+      color: #64748b;
+      margin-top: 0.75rem;
+      padding-top: 0.75rem;
+      border-top: 1px solid #e2e8f0;
+    }
+    .nomination-meta-item {
+      display: flex;
+      align-items: center;
+      gap: 0.25rem;
+    }
+    .no-nominations {
+      text-align: center;
+      padding: 3rem;
+      color: #94a3b8;
+      font-style: italic;
+    }
+    .footer {
+      padding: 2rem;
+      text-align: center;
+      color: #64748b;
+      font-size: 0.875rem;
+      background: #f1f5f9;
+      border-top: 1px solid #e2e8f0;
+    }
+    @media print {
+      body {
+        padding: 0;
+        background: white;
+      }
+      .report-container {
+        box-shadow: none;
+      }
+      .section {
+        page-break-inside: avoid;
+      }
+      .nomination-item {
+        page-break-inside: avoid;
+      }
+    }
+  </style>
+</head>
+<body>
+  <div class="report-container">
+    <div class="report-header">
+      <h1>🏆 Framies Voting Report</h1>
+      <div class="subtitle">Complete Voting Data & Results</div>
+    </div>
     
-    // Add summary section with winners
-    csvRows.push('AWARD WINNERS SUMMARY')
-    csvRows.push('')
-    csvRows.push(['Award Category', 'Winner', 'Vote Count', 'Rationale', 'Total Votes in Category', 'Total Voters'].join(','))
+    <div class="report-meta">
+      <div class="report-meta-item">
+        <strong>Report Date:</strong> ${reportDate}
+      </div>
+      <div class="report-meta-item">
+        <strong>Total Awards:</strong> ${awards.length}
+      </div>
+      <div class="report-meta-item">
+        <strong>Total Nominations:</strong> ${(framiesData.nominations || []).length}
+      </div>
+      <div class="report-meta-item">
+        <strong>Total Votes:</strong> ${(framiesData.votes || []).length}
+      </div>
+    </div>
     
+    <div class="section">
+      <h2 class="section-title">Award Winners</h2>
+      <div class="winners-grid">`
+
+    // Add winners section
     awards.forEach(award => {
       const stats = getAwardVoteStats(award.id)
       if (stats.nominations.length > 0) {
-        const winner = stats.nominations[0] // First one is the winner (sorted by vote count)
-        const rationaleStr = `"${(winner.rationale || '').replace(/"/g, '""')}"`
-        const row = [
-          `"${award.label}"`,
-          `"${winner.nominee}"`,
-          winner.voteCount,
-          rationaleStr,
-          stats.totalVotes,
-          stats.uniqueVoters
-        ]
-        csvRows.push(row.join(','))
+        const winner = stats.nominations[0]
+        const rationale = (winner.rationale || '').replace(/</g, '&lt;').replace(/>/g, '&gt;')
+        htmlContent += `
+        <div class="winner-card">
+          <div class="winner-award">${award.label}</div>
+          <div class="winner-name">${winner.nominee}</div>
+          <div class="winner-votes">${winner.voteCount} vote${winner.voteCount !== 1 ? 's' : ''}</div>
+          ${rationale ? `<div class="winner-rationale">${rationale}</div>` : ''}
+        </div>`
       } else {
-        const row = [
-          `"${award.label}"`,
-          'No nominations',
-          '0',
-          '""',
-          '0',
-          '0'
-        ]
-        csvRows.push(row.join(','))
+        htmlContent += `
+        <div class="winner-card" style="background: #f1f5f9; border-color: #cbd5e1;">
+          <div class="winner-award" style="color: #64748b;">${award.label}</div>
+          <div class="winner-name" style="color: #94a3b8;">No nominations</div>
+        </div>`
       }
     })
+
+    htmlContent += `
+      </div>
+    </div>
     
-    // Add separator
-    csvRows.push('')
-    csvRows.push('DETAILED VOTING DATA')
-    csvRows.push('')
-    
-    // Create CSV header for detailed data
-    const headers = ['Award Category', 'Nominee', 'Vote Count', 'Rationale', 'Voter Emails', 'Nominated At', 'Nominated By']
-    csvRows.push(headers.join(','))
-    
-    // Convert voting data to CSV rows
+    <div class="section">
+      <h2 class="section-title">Detailed Voting Data</h2>`
+
+    // Add detailed data for each award
     awards.forEach(award => {
       const stats = getAwardVoteStats(award.id)
+      const description = (award.description || '').replace(/</g, '&lt;').replace(/>/g, '&gt;')
       
-      stats.nominations.forEach(nomination => {
-        // Get all voters for this nomination
-        const votes = (framiesData.votes || []).filter(v => v.nominationId === nomination.id)
-        const voterEmails = votes
-          .map(v => v.voterEmail || v.voterId || 'Unknown')
-          .filter((email, index, self) => self.indexOf(email) === index) // Remove duplicates
-          .join('; ')
-        
-        const rationaleStr = `"${(nomination.rationale || '').replace(/"/g, '""')}"`
-        const voterEmailsStr = `"${voterEmails.replace(/"/g, '""')}"`
-        const nominatedAt = nomination.nominatedAt 
-          ? new Date(nomination.nominatedAt).toLocaleString() 
-          : ''
-        const nominatedBy = nomination.nominatedBy || 'Anonymous'
-        
-        const row = [
-          `"${award.label}"`,
-          `"${nomination.nominee}"`,
-          nomination.voteCount,
-          rationaleStr,
-          voterEmailsStr,
-          `"${nominatedAt}"`,
-          `"${nominatedBy}"`
-        ]
-        csvRows.push(row.join(','))
-      })
+      htmlContent += `
+      <div class="award-section">
+        <div class="award-header">
+          <div class="award-title">${award.label}</div>
+          ${description ? `<div class="award-description">${description}</div>` : ''}
+        </div>
+        <div class="award-stats">
+          <div class="award-stat">
+            <div class="award-stat-label">Nominations</div>
+            <div class="award-stat-value">${stats.nominationCount}</div>
+          </div>
+          <div class="award-stat">
+            <div class="award-stat-label">Total Votes</div>
+            <div class="award-stat-value">${stats.totalVotes}</div>
+          </div>
+          <div class="award-stat">
+            <div class="award-stat-label">Unique Voters</div>
+            <div class="award-stat-value">${stats.uniqueVoters}</div>
+          </div>
+        </div>
+        <div class="nominations-list">`
+
+      if (stats.nominations.length === 0) {
+        htmlContent += `
+          <div class="no-nominations">No nominations for this award category.</div>`
+      } else {
+        stats.nominations.forEach((nomination, idx) => {
+          const rationale = (nomination.rationale || '').replace(/</g, '&lt;').replace(/>/g, '&gt;')
+          const nominatedAt = nomination.nominatedAt 
+            ? new Date(nomination.nominatedAt).toLocaleString() 
+            : 'Unknown'
+          const nominatedBy = (nomination.nominatedBy || 'Anonymous').replace(/</g, '&lt;').replace(/>/g, '&gt;')
+          
+          htmlContent += `
+          <div class="nomination-item">
+            <div class="nomination-rank">#${idx + 1}</div>
+            <div class="nomination-content">
+              <div class="nomination-header">
+                <div class="nomination-name">${nomination.nominee}</div>
+                <div class="nomination-votes">${nomination.voteCount} vote${nomination.voteCount !== 1 ? 's' : ''}</div>
+              </div>
+              ${rationale ? `<div class="nomination-rationale">${rationale}</div>` : ''}
+              ${nomination.supportingImage ? `<img src="${nomination.supportingImage}" alt="Supporting image for ${nomination.nominee}" class="nomination-image" />` : ''}
+              <div class="nomination-meta">
+                <div class="nomination-meta-item">
+                  <strong>Nominated by:</strong> ${nominatedBy}
+                </div>
+                <div class="nomination-meta-item">
+                  <strong>Nominated at:</strong> ${nominatedAt}
+                </div>
+              </div>
+            </div>
+          </div>`
+        })
+      }
+
+      htmlContent += `
+        </div>
+      </div>`
     })
+
+    htmlContent += `
+    </div>
     
-    // Create CSV content
-    const csvContent = csvRows.join('\n')
-    
+    <div class="footer">
+      <p>Generated on ${reportDate}</p>
+      <p>Framies Voting System</p>
+    </div>
+  </div>
+</body>
+</html>`
+
     // Create blob and download
-    const blob = new Blob([csvContent], { type: 'text/csv;charset=utf-8;' })
+    const blob = new Blob([htmlContent], { type: 'text/html;charset=utf-8;' })
     const link = document.createElement('a')
     const url = URL.createObjectURL(blob)
     link.setAttribute('href', url)
-    link.setAttribute('download', `framies-voting-data-${new Date().toISOString().split('T')[0]}.csv`)
+    link.setAttribute('download', `framies-voting-report-${new Date().toISOString().split('T')[0]}.html`)
     link.style.visibility = 'hidden'
     document.body.appendChild(link)
     link.click()
@@ -1938,6 +2322,14 @@ function AwardManagement() {
                             <span className="nomination-vote-count">
                               {nomination.voteCount} vote{nomination.voteCount !== 1 ? 's' : ''}
                             </span>
+                            <button
+                              onClick={() => handleRemoveNomination(nomination.id)}
+                              className="remove-nomination-button"
+                              title="Remove nomination"
+                              disabled={saving}
+                            >
+                              🗑️ Remove
+                            </button>
                           </div>
                           {nomination.rationale && (
                             <p className="nomination-vote-rationale">{nomination.rationale}</p>
