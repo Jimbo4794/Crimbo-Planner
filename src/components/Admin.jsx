@@ -1488,7 +1488,7 @@ function AwardManagement() {
   const [expandedSections, setExpandedSections] = useState({
     addAward: true,
     currentAwards: true,
-    voteStats: true
+    nominations: true
   })
 
   // Generate UUID v4
@@ -1532,29 +1532,11 @@ function AwardManagement() {
     return (framiesData.nominations || []).filter(n => n.awardId === awardId)
   }
 
-  // Get vote count for a nomination
-  const getVoteCount = (nominationId) => {
-    return (framiesData.votes || []).filter(v => v.nominationId === nominationId).length
-  }
-
-  // Get vote statistics for an award
-  const getAwardVoteStats = (awardId) => {
+  // Get nominations for an award (without vote counts)
+  const getAwardNominations = (awardId) => {
     const nominations = getNominationsForAward(awardId)
-    const nominationStats = nominations.map(nom => ({
-      ...nom,
-      voteCount: getVoteCount(nom.id)
-    })).sort((a, b) => b.voteCount - a.voteCount)
-    
-    const totalVotes = nominationStats.reduce((sum, nom) => sum + nom.voteCount, 0)
-    const uniqueVoters = new Set((framiesData.votes || [])
-      .filter(v => nominations.some(n => n.id === v.nominationId))
-      .map(v => v.voterEmail || v.voterId)
-    ).size
-
     return {
-      nominations: nominationStats,
-      totalVotes,
-      uniqueVoters,
+      nominations: nominations,
       nominationCount: nominations.length
     }
   }
@@ -1977,8 +1959,8 @@ function AwardManagement() {
 <body>
   <div class="report-container">
     <div class="report-header">
-      <h1>🏆 Framies Voting Report</h1>
-      <div class="subtitle">Complete Voting Data & Results</div>
+      <h1>🏆 Framies Nominations Report</h1>
+      <div class="subtitle">Complete Nominations Data</div>
     </div>
     
     <div class="report-meta">
@@ -1991,47 +1973,14 @@ function AwardManagement() {
       <div class="report-meta-item">
         <strong>Total Nominations:</strong> ${(framiesData.nominations || []).length}
       </div>
-      <div class="report-meta-item">
-        <strong>Total Votes:</strong> ${(framiesData.votes || []).length}
-      </div>
     </div>
     
     <div class="section">
-      <h2 class="section-title">Award Winners</h2>
-      <div class="winners-grid">`
-
-    // Add winners section
-    awards.forEach(award => {
-      const stats = getAwardVoteStats(award.id)
-      if (stats.nominations.length > 0) {
-        const winner = stats.nominations[0]
-        const rationale = (winner.rationale || '').replace(/</g, '&lt;').replace(/>/g, '&gt;')
-        htmlContent += `
-        <div class="winner-card">
-          <div class="winner-award">${award.label}</div>
-          <div class="winner-name">${winner.nominee}</div>
-          <div class="winner-votes">${winner.voteCount} vote${winner.voteCount !== 1 ? 's' : ''}</div>
-          ${rationale ? `<div class="winner-rationale">${rationale}</div>` : ''}
-        </div>`
-      } else {
-        htmlContent += `
-        <div class="winner-card" style="background: #f1f5f9; border-color: #cbd5e1;">
-          <div class="winner-award" style="color: #64748b;">${award.label}</div>
-          <div class="winner-name" style="color: #94a3b8;">No nominations</div>
-        </div>`
-      }
-    })
-
-    htmlContent += `
-      </div>
-    </div>
-    
-    <div class="section">
-      <h2 class="section-title">Detailed Voting Data</h2>`
+      <h2 class="section-title">Nominations by Award</h2>`
 
     // Add detailed data for each award
     awards.forEach(award => {
-      const stats = getAwardVoteStats(award.id)
+      const stats = getAwardNominations(award.id)
       const description = (award.description || '').replace(/</g, '&lt;').replace(/>/g, '&gt;')
       
       htmlContent += `
@@ -2044,14 +1993,6 @@ function AwardManagement() {
           <div class="award-stat">
             <div class="award-stat-label">Nominations</div>
             <div class="award-stat-value">${stats.nominationCount}</div>
-          </div>
-          <div class="award-stat">
-            <div class="award-stat-label">Total Votes</div>
-            <div class="award-stat-value">${stats.totalVotes}</div>
-          </div>
-          <div class="award-stat">
-            <div class="award-stat-label">Unique Voters</div>
-            <div class="award-stat-value">${stats.uniqueVoters}</div>
           </div>
         </div>
         <div class="nominations-list">`
@@ -2073,7 +2014,6 @@ function AwardManagement() {
             <div class="nomination-content">
               <div class="nomination-header">
                 <div class="nomination-name">${nomination.nominee}</div>
-                <div class="nomination-votes">${nomination.voteCount} vote${nomination.voteCount !== 1 ? 's' : ''}</div>
               </div>
               ${rationale ? `<div class="nomination-rationale">${rationale}</div>` : ''}
               ${nomination.supportingImage ? `<img src="${nomination.supportingImage}" alt="Supporting image for ${nomination.nominee}" class="nomination-image" />` : ''}
@@ -2100,7 +2040,7 @@ function AwardManagement() {
     
     <div class="footer">
       <p>Generated on ${reportDate}</p>
-      <p>Framies Voting System</p>
+      <p>Framies Nominations System</p>
     </div>
   </div>
 </body>
@@ -2111,7 +2051,7 @@ function AwardManagement() {
     const link = document.createElement('a')
     const url = URL.createObjectURL(blob)
     link.setAttribute('href', url)
-    link.setAttribute('download', `framies-voting-report-${new Date().toISOString().split('T')[0]}.html`)
+    link.setAttribute('download', `framies-nominations-report-${new Date().toISOString().split('T')[0]}.html`)
     link.style.visibility = 'hidden'
     document.body.appendChild(link)
     link.click()
@@ -2268,44 +2208,38 @@ function AwardManagement() {
         )}
       </div>
 
-      <div className="award-votes-section collapsible-section">
+      <div className="award-nominations-section collapsible-section">
         <div 
-          className="collapsible-header award-votes-header"
-          onClick={() => toggleSection('voteStats')}
+          className="collapsible-header award-nominations-header"
+          onClick={() => toggleSection('nominations')}
         >
-          <h4>Vote Statistics</h4>
+          <h4>Nominations</h4>
           <div className="header-actions" onClick={(e) => e.stopPropagation()}>
             <button onClick={handleExportVotingData} className="export-button" disabled={loadingVotes || awards.length === 0}>
-              📥 Export Voting Data
+              📥 Export Nominations Data
             </button>
             <button onClick={loadFramies} className="refresh-button" disabled={loadingVotes}>
               {loadingVotes ? 'Loading...' : '🔄 Refresh'}
             </button>
-            <span className="collapse-icon">{expandedSections.voteStats ? '▼' : '▶'}</span>
+            <span className="collapse-icon">{expandedSections.nominations ? '▼' : '▶'}</span>
           </div>
         </div>
-        {expandedSections.voteStats && (
+        {expandedSections.nominations && (
           <div className="collapsible-content">
             {loadingVotes ? (
-          <p className="loading-text">Loading vote data...</p>
+          <p className="loading-text">Loading nominations data...</p>
         ) : awards.length === 0 ? (
-          <p className="no-data">No awards to display votes for.</p>
+          <p className="no-data">No awards to display nominations for.</p>
         ) : (
-          <div className="award-votes-grid">
+          <div className="award-nominations-grid">
             {awards.map(award => {
-              const stats = getAwardVoteStats(award.id)
+              const stats = getAwardNominations(award.id)
               return (
-                <div key={award.id} className="award-vote-card">
-                  <div className="award-vote-header">
+                <div key={award.id} className="award-nomination-card">
+                  <div className="award-nomination-header">
                     <h5>{award.label}</h5>
-                    <div className="award-vote-summary">
-                      <span className="vote-stat">
-                        <strong>{stats.totalVotes}</strong> total vote{stats.totalVotes !== 1 ? 's' : ''}
-                      </span>
-                      <span className="vote-stat">
-                        <strong>{stats.uniqueVoters}</strong> voter{stats.uniqueVoters !== 1 ? 's' : ''}
-                      </span>
-                      <span className="vote-stat">
+                    <div className="award-nomination-summary">
+                      <span className="nomination-stat">
                         <strong>{stats.nominationCount}</strong> nomination{stats.nominationCount !== 1 ? 's' : ''}
                       </span>
                     </div>
@@ -2313,15 +2247,12 @@ function AwardManagement() {
                   {stats.nominations.length === 0 ? (
                     <p className="no-nominations">No nominations yet.</p>
                   ) : (
-                    <div className="nomination-votes-list">
+                    <div className="nomination-list">
                       {stats.nominations.map((nomination, idx) => (
-                        <div key={nomination.id} className="nomination-vote-item">
-                          <div className="nomination-vote-info">
+                        <div key={nomination.id} className="nomination-item">
+                          <div className="nomination-info">
                             <span className="nomination-rank">#{idx + 1}</span>
                             <span className="nomination-name">{nomination.nominee}</span>
-                            <span className="nomination-vote-count">
-                              {nomination.voteCount} vote{nomination.voteCount !== 1 ? 's' : ''}
-                            </span>
                             <button
                               onClick={() => handleRemoveNomination(nomination.id)}
                               className="remove-nomination-button"
@@ -2332,7 +2263,25 @@ function AwardManagement() {
                             </button>
                           </div>
                           {nomination.rationale && (
-                            <p className="nomination-vote-rationale">{nomination.rationale}</p>
+                            <p className="nomination-rationale">{nomination.rationale}</p>
+                          )}
+                          {nomination.supportingImage && (
+                            <div className="nomination-image-container">
+                              <img 
+                                src={nomination.supportingImage} 
+                                alt={`Supporting image for ${nomination.nominee}`}
+                                className="nomination-supporting-image"
+                                style={{
+                                  maxWidth: '200px',
+                                  maxHeight: '200px',
+                                  borderRadius: '8px',
+                                  border: '2px solid #e2e8f0',
+                                  objectFit: 'contain',
+                                  background: '#f8fafc',
+                                  marginTop: '0.5rem'
+                                }}
+                              />
+                            </div>
                           )}
                         </div>
                       ))}

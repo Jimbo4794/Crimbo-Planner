@@ -18,40 +18,8 @@ function Framies({ onBackToMenu, rsvps = [], framiesNominationsLocked = false, f
   const [showImageCropper, setShowImageCropper] = useState(false)
   const [submitting, setSubmitting] = useState(false)
   const [submitMessage, setSubmitMessage] = useState(null)
-  const [selectedAward, setSelectedAward] = useState(null)
   const [showNominationDialog, setShowNominationDialog] = useState(false)
-  const [showEmailDialog, setShowEmailDialog] = useState(false)
-  const [voterEmail, setVoterEmail] = useState(() => {
-    return localStorage.getItem('framies_voter_email') || ''
-  })
   const isUpdatingFromWebSocket = useRef(false)
-
-  // Email validation
-  const validateEmail = (email) => {
-    const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/
-    return emailRegex.test(email)
-  }
-
-  // Handle email submission
-  const handleEmailSubmit = (e) => {
-    e.preventDefault()
-    const email = voterEmail.trim()
-    if (!email) {
-      setSubmitMessage({ type: 'error', text: 'Please enter your email address.' })
-      setTimeout(() => setSubmitMessage(null), 5000)
-      return
-    }
-    if (!validateEmail(email)) {
-      setSubmitMessage({ type: 'error', text: 'Please enter a valid email address.' })
-      setTimeout(() => setSubmitMessage(null), 5000)
-      return
-    }
-    localStorage.setItem('framies_voter_email', email)
-    setVoterEmail(email) // Update state to reflect saved email
-    setSubmitMessage({ type: 'success', text: 'Email saved! You can now vote.' })
-    setTimeout(() => setSubmitMessage(null), 3000)
-    setShowEmailDialog(false) // Close dialog after successful submission
-  }
 
   // Get list of people from RSVPs for nomination dropdown
   const peopleList = rsvps
@@ -221,143 +189,19 @@ function Framies({ onBackToMenu, rsvps = [], framiesNominationsLocked = false, f
     }
   }
 
-  const handleVote = async (nominationId) => {
-    try {
-      // Check if voting is locked
-      if (framiesVotingLocked) {
-        setSubmitMessage({ type: 'error', text: 'Framies voting is currently locked. Please contact the administrator.' })
-        setTimeout(() => setSubmitMessage(null), 5000)
-        return
-      }
-      
-      // Check if email is provided
-      const email = localStorage.getItem('framies_voter_email')
-      if (!email || !email.trim() || !validateEmail(email)) {
-        // Open email registration dialog instead of showing error
-        setShowEmailDialog(true)
-        setSubmitMessage({ type: 'error', text: 'Please register your email address to vote.' })
-        setTimeout(() => setSubmitMessage(null), 5000)
-        return
-      }
-
-      // Get or create a persistent voter ID using localStorage
-      let voterId = localStorage.getItem('framies_voter_id')
-      if (!voterId) {
-        voterId = `voter_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`
-        localStorage.setItem('framies_voter_id', voterId)
-      }
-      
-      // Find the nomination being voted on to get its award category
-      const nomination = (framiesData.nominations || []).find(n => n.id === nominationId)
-      if (!nomination) {
-        setSubmitMessage({ type: 'error', text: 'Nomination not found.' })
-        setTimeout(() => setSubmitMessage(null), 5000)
-        return
-      }
-
-      const awardId = nomination.awardId
-      
-      // Get all nominations in this award category
-      const categoryNominations = getNominationsForAward(awardId)
-      const categoryNominationIds = categoryNominations.map(n => n.id)
-      
-      // Remove any existing votes this voter has for nominations in this category
-      const existingVotes = (framiesData.votes || []).filter(
-        v => v.voterId === voterId && categoryNominationIds.includes(v.nominationId)
-      )
-
-      // Check if user is voting for the same nomination they already voted for
-      const isVotingSame = existingVotes.some(v => v.nominationId === nominationId)
-      
-      if (isVotingSame) {
-        // Remove the vote (allow unvoting)
-        const updatedVotes = (framiesData.votes || []).filter(
-          v => !(v.nominationId === nominationId && v.voterId === voterId)
-        )
-        const updatedData = {
-          nominations: framiesData.nominations || [],
-          votes: updatedVotes
-        }
-        setFramiesData(updatedData)
-        setSubmitMessage({ type: 'success', text: 'Vote removed!' })
-        setTimeout(() => setSubmitMessage(null), 3000)
-        return
-      }
-
-      // Remove all existing votes in this category, then add the new vote
-      const votesWithoutCategory = (framiesData.votes || []).filter(
-        v => !(v.voterId === voterId && categoryNominationIds.includes(v.nominationId))
-      )
-
-      const newVote = {
-        id: Date.now().toString(),
-        nominationId,
-        voterId,
-        voterEmail: email.trim(),
-        votedAt: new Date().toISOString()
-      }
-
-      const updatedData = {
-        nominations: framiesData.nominations || [],
-        votes: [...votesWithoutCategory, newVote]
-      }
-
-      setFramiesData(updatedData)
-      setSubmitMessage({ type: 'success', text: 'Vote recorded! Your previous vote in this category has been replaced.' })
-      setTimeout(() => setSubmitMessage(null), 3000)
-    } catch (err) {
-      logger.error('Error voting:', err)
-      setSubmitMessage({ type: 'error', text: 'Failed to record vote. Please try again.' })
-      setTimeout(() => setSubmitMessage(null), 5000)
-    }
-  }
-
-  // Get nominations for a specific award
-  const getNominationsForAward = (awardId) => {
-    return (framiesData.nominations || []).filter(n => n.awardId === awardId)
-  }
-
-  // Get vote count for a nomination
-  const getVoteCount = (nominationId) => {
-    return (framiesData.votes || []).filter(v => v.nominationId === nominationId).length
-  }
-
-  // Check if current user has voted for a nomination
-  const hasUserVoted = (nominationId) => {
-    const voterId = localStorage.getItem('framies_voter_id')
-    if (!voterId) return false
-    return (framiesData.votes || []).some(
-      v => v.nominationId === nominationId && v.voterId === voterId
-    )
-  }
-
-  // Get all votes for nominations in an award (to find winner)
-  const getAwardResults = (awardId) => {
-    const nominations = getNominationsForAward(awardId)
-    return nominations.map(nom => ({
-      ...nom,
-      voteCount: getVoteCount(nom.id)
-    })).sort((a, b) => b.voteCount - a.voteCount)
-  }
 
   // Handle Escape key to close dialogs
   useEffect(() => {
     const handleEscape = (e) => {
       if (e.key === 'Escape') {
-        if (selectedAward) {
-          setSelectedAward(null)
-        }
         if (showNominationDialog) {
           setShowNominationDialog(false)
-        }
-        if (showEmailDialog) {
-          setShowEmailDialog(false)
         }
       }
     }
     document.addEventListener('keydown', handleEscape)
     return () => document.removeEventListener('keydown', handleEscape)
-  }, [selectedAward, showNominationDialog, showEmailDialog])
+  }, [showNominationDialog])
 
   if (loading) {
     return (
@@ -367,15 +211,11 @@ function Framies({ onBackToMenu, rsvps = [], framiesNominationsLocked = false, f
     )
   }
 
-  // Check if email is saved in localStorage (not just typed)
-  const savedEmail = localStorage.getItem('framies_voter_email')
-  const hasValidEmail = savedEmail && savedEmail.trim() && validateEmail(savedEmail)
-
   return (
     <div className="framies-container">
       <h2>🏆 Framies!</h2>
       <p className="framies-description">
-        Nominate and vote for your favorite people in various award categories!
+        Nominate your favorite people in various award categories!
       </p>
 
       {submitMessage && (
@@ -396,11 +236,6 @@ function Framies({ onBackToMenu, rsvps = [], framiesNominationsLocked = false, f
           <p>🔒 Framies nominations are currently locked. New nominations cannot be added at this time.</p>
         </div>
       )}
-      {framiesVotingLocked && (
-        <div className="lock-notice">
-          <p>🔒 Framies voting is currently locked. Voting is not available at this time.</p>
-        </div>
-      )}
       <div className="framies-actions">
         <button 
           onClick={() => setShowNominationDialog(true)}
@@ -409,24 +244,6 @@ function Framies({ onBackToMenu, rsvps = [], framiesNominationsLocked = false, f
         >
           ➕ Make a Nomination
         </button>
-        {hasValidEmail ? (
-          <div className="email-status">
-            <span className="email-confirmed-text">✓ {savedEmail}</span>
-            <button 
-              onClick={() => setShowEmailDialog(true)}
-              className="action-button change-email-button"
-            >
-              Change Email
-            </button>
-          </div>
-        ) : (
-          <button 
-            onClick={() => setShowEmailDialog(true)}
-            className="action-button email-button"
-          >
-            📧 Voter Registration
-          </button>
-        )}
       </div>
 
       {/* Nomination Dialog */}
@@ -557,52 +374,6 @@ function Framies({ onBackToMenu, rsvps = [], framiesNominationsLocked = false, f
         document.body
       )}
 
-      {/* Email Dialog */}
-      {showEmailDialog && createPortal(
-        <div 
-          className="dialog-overlay" 
-          onClick={() => setShowEmailDialog(false)}
-        >
-          <div 
-            className="email-dialog" 
-            onClick={(e) => e.stopPropagation()}
-          >
-            <div className="email-dialog-header">
-              <h3>Voter Registration</h3>
-              <button
-                className="close-dialog-button"
-                onClick={() => setShowEmailDialog(false)}
-                aria-label="Close dialog"
-              >
-                ×
-              </button>
-            </div>
-            <div className="email-dialog-content">
-              <p className="email-section-description">
-                Please provide your email address to vote for nominations.
-              </p>
-              <form onSubmit={handleEmailSubmit} className="email-form">
-                <div className="form-group">
-                  <label htmlFor="voter-email">Email Address *</label>
-                  <input
-                    id="voter-email"
-                    type="email"
-                    value={voterEmail}
-                    onChange={(e) => setVoterEmail(e.target.value)}
-                    placeholder="your.email@example.com"
-                    required
-                  />
-                </div>
-                <button type="submit" className="submit-button">
-                  Save Email
-                </button>
-              </form>
-            </div>
-          </div>
-        </div>,
-        document.body
-      )}
-
       <div className="awards-section">
         <h3>Award Categories</h3>
         <div className="awards-grid">
@@ -610,22 +381,13 @@ function Framies({ onBackToMenu, rsvps = [], framiesNominationsLocked = false, f
             return (
               <div 
                 key={award.id} 
-                className="award-card clickable"
-                onClick={() => setSelectedAward(award.id)}
-                role="button"
-                tabIndex={0}
-                onKeyDown={(e) => {
-                  if (e.key === 'Enter' || e.key === ' ') {
-                    e.preventDefault()
-                    setSelectedAward(award.id)
-                  }
-                }}
+                className="award-card"
               >
                 <div className="award-header">
                   <h4>{award.label}</h4>
                 </div>
                 <div className="award-summary">
-                  <p className="award-description">{award.description || 'Click to view nominations and vote!'}</p>
+                  <p className="award-description">{award.description || ''}</p>
                 </div>
               </div>
             )
@@ -633,77 +395,6 @@ function Framies({ onBackToMenu, rsvps = [], framiesNominationsLocked = false, f
         </div>
       </div>
 
-      {/* Award Dialog */}
-      {selectedAward && (() => {
-        const award = awards.find(a => a.id === selectedAward)
-        const results = getAwardResults(selectedAward)
-        return createPortal(
-          <div 
-            className="dialog-overlay" 
-            onClick={() => setSelectedAward(null)}
-          >
-            <div 
-              className="award-dialog" 
-              onClick={(e) => e.stopPropagation()}
-            >
-              <div className="award-dialog-header">
-                <h3>{award?.label || 'Award Category'}</h3>
-                <button
-                  className="close-dialog-button"
-                  onClick={() => setSelectedAward(null)}
-                  aria-label="Close dialog"
-                >
-                  ×
-                </button>
-              </div>
-              <div className="award-dialog-content">
-                {results.length === 0 ? (
-                  <p className="no-nominations">No nominations yet. Be the first to nominate someone!</p>
-                ) : (
-                  <div className="nominations-list">
-                    {results.map((nomination) => (
-                      <div key={nomination.id} className="nomination-item">
-                        <div className="nomination-info">
-                          <div className="nomination-header">
-                            <span className="nominee-name">{nomination.nominee}</span>
-                          </div>
-                          {nomination.rationale && (
-                            <p className="nomination-rationale">{nomination.rationale}</p>
-                          )}
-                          {nomination.supportingImage && (
-                            <div className="nomination-image-container">
-                              <img 
-                                src={nomination.supportingImage} 
-                                alt={`Supporting image for ${nomination.nominee}`}
-                                className="nomination-supporting-image"
-                              />
-                            </div>
-                          )}
-                        </div>
-                        <button
-                          onClick={() => handleVote(nomination.id)}
-                          className={`vote-button ${hasUserVoted(nomination.id) ? 'voted' : ''}`}
-                          disabled={framiesVotingLocked}
-                          title={
-                            framiesVotingLocked
-                              ? 'Voting is currently locked'
-                              : hasUserVoted(nomination.id) 
-                              ? 'Click to remove your vote' 
-                              : 'Vote for this nomination'
-                          }
-                        >
-                          {framiesVotingLocked ? '🔒 Locked' : hasUserVoted(nomination.id) ? '✓ Voted' : '👍 Vote'}
-                        </button>
-                      </div>
-                    ))}
-                  </div>
-                )}
-              </div>
-            </div>
-          </div>,
-          document.body
-        )
-      })()}
     </div>
   )
 }
