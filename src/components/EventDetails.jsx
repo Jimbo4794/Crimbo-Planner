@@ -3,6 +3,95 @@ import './EventDetails.css'
 import { fetchEventDetails } from '../api'
 import logger from '../utils/logger'
 
+// Helper function to render text with embedded images
+const renderTextWithImages = (text, images) => {
+  if (!text) {
+    return text
+  }
+
+  // Check if text contains image placeholders
+  const hasImagePlaceholders = /\[IMAGE:[^\]]+\]/.test(text)
+  if (!hasImagePlaceholders) {
+    return text
+  }
+
+  // Create a map of images by ID for quick lookup
+  const imageMap = new Map()
+  if (images && images.length > 0) {
+    images.forEach(img => {
+      if (img.id) {
+        imageMap.set(img.id, img)
+      }
+    })
+  }
+
+  // Split text by image placeholders and render
+  // Format: [IMAGE:image-id] or [IMAGE:image-id:width:height]
+  const parts = []
+  const regex = /\[IMAGE:([^:\]]+)(?::([^:\]]+))?(?::([^\]]+))?\]/g
+  let lastIndex = 0
+  let match
+  let matchCount = 0
+
+  while ((match = regex.exec(text)) !== null) {
+    matchCount++
+    // Add text before the match
+    if (match.index > lastIndex) {
+      const textBefore = text.substring(lastIndex, match.index)
+      if (textBefore) {
+        parts.push(textBefore)
+      }
+    }
+
+    // Parse image ID and optional size parameters
+    const imageId = match[1]
+    const width = match[2] && match[2] !== 'auto' ? match[2] : null
+    const height = match[3] && match[3] !== 'auto' ? match[3] : null
+    
+    const image = imageMap.get(imageId)
+    if (image) {
+      // Build style object for width and height
+      const imageStyle = {}
+      if (width) {
+        imageStyle.width = width.includes('%') ? width : `${width}px`
+      }
+      if (height) {
+        imageStyle.height = height.includes('%') ? height : `${height}px`
+      }
+      
+      parts.push(
+        <img
+          key={`img-${imageId}-${match.index}`}
+          src={image.data}
+          alt="Event"
+          className="embedded-event-image"
+          style={Object.keys(imageStyle).length > 0 ? imageStyle : undefined}
+        />
+      )
+    } else {
+      // If image not found, just show the placeholder text (or nothing)
+      // parts.push(`[Image: ${imageId} not found]`)
+    }
+
+    lastIndex = regex.lastIndex
+  }
+
+  // Add remaining text
+  if (lastIndex < text.length) {
+    const remainingText = text.substring(lastIndex)
+    if (remainingText) {
+      parts.push(remainingText)
+    }
+  }
+
+  // If no matches were processed, return original text
+  if (matchCount === 0) {
+    return text
+  }
+
+  return parts.length > 0 ? parts : text
+}
+
 function EventDetails({ onBackToMenu, eventDetails: propEventDetails }) {
   const [eventDetails, setEventDetails] = useState({
     eventName: '',
@@ -114,7 +203,9 @@ function EventDetails({ onBackToMenu, eventDetails: propEventDetails }) {
           <div className="info-section">
             <h3>Event Description</h3>
             <div className="info-item">
-              <span className="info-value description-text">{eventDetails.description}</span>
+              <div className="info-value description-text">
+                {renderTextWithImages(eventDetails.description, eventDetails.images)}
+              </div>
             </div>
           </div>
         )}
@@ -152,9 +243,24 @@ function EventDetails({ onBackToMenu, eventDetails: propEventDetails }) {
             )}
             {eventDetails.additionalInfo && (
               <div className="info-item">
-                <span className="info-value description-text">{eventDetails.additionalInfo}</span>
+                <div className="info-value description-text">
+                  {renderTextWithImages(eventDetails.additionalInfo, eventDetails.images)}
+                </div>
               </div>
             )}
+          </div>
+        )}
+
+        {eventDetails.showImages !== false && eventDetails.images && eventDetails.images.length > 0 && (
+          <div className="info-section">
+            <h3>Event Images</h3>
+            <div className="event-images-gallery">
+              {eventDetails.images.map((image) => (
+                <div key={image.id} className="event-image-container">
+                  <img src={image.data} alt="Event" className="event-image" />
+                </div>
+              ))}
+            </div>
           </div>
         )}
       </div>

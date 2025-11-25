@@ -31,7 +31,9 @@ function Admin({ rsvps, menuCategories, tablesCount, seatsPerTable, tablePositio
     contactEmail: '',
     contactPhone: '',
     dressCode: '',
-    additionalInfo: ''
+    additionalInfo: '',
+    images: [],
+    showImages: true
   })
   const [savingEventDetails, setSavingEventDetails] = useState(false)
   const [eventDetailsMessage, setEventDetailsMessage] = useState(null)
@@ -101,7 +103,20 @@ function Admin({ rsvps, menuCategories, tablesCount, seatsPerTable, tablePositio
   // Load event details when tab is opened or eventDetails prop changes
   useEffect(() => {
     if (eventDetails) {
-      setEventDetailsForm(eventDetails)
+      setEventDetailsForm({
+        eventName: eventDetails.eventName || '',
+        date: eventDetails.date || '',
+        time: eventDetails.time || '',
+        location: eventDetails.location || '',
+        address: eventDetails.address || '',
+        description: eventDetails.description || '',
+        contactEmail: eventDetails.contactEmail || '',
+        contactPhone: eventDetails.contactPhone || '',
+        dressCode: eventDetails.dressCode || '',
+        additionalInfo: eventDetails.additionalInfo || '',
+        images: eventDetails.images || [],
+        showImages: eventDetails.showImages !== undefined ? eventDetails.showImages : true
+      })
     }
   }, [eventDetails])
 
@@ -165,6 +180,161 @@ function Admin({ rsvps, menuCategories, tablesCount, seatsPerTable, tablePositio
     } finally {
       setSavingEventDetails(false)
     }
+  }
+
+  // Compress image for event details (similar to background images)
+  const compressEventImage = async (file, maxWidth = 1920, maxHeight = 1920, quality = 0.8) => {
+    return new Promise((resolve, reject) => {
+      const reader = new FileReader()
+      reader.onload = (event) => {
+        const img = new Image()
+        img.onload = () => {
+          // Calculate new dimensions while maintaining aspect ratio
+          let width = img.width
+          let height = img.height
+          
+          if (width > maxWidth || height > maxHeight) {
+            const ratio = Math.min(maxWidth / width, maxHeight / height)
+            width = width * ratio
+            height = height * ratio
+          }
+          
+          // Create canvas and draw resized image
+          const canvas = document.createElement('canvas')
+          canvas.width = width
+          canvas.height = height
+          const ctx = canvas.getContext('2d')
+          ctx.drawImage(img, 0, 0, width, height)
+          
+          // Convert to JPEG with compression
+          const compressedDataUrl = canvas.toDataURL('image/jpeg', quality)
+          resolve(compressedDataUrl)
+        }
+        img.onerror = () => reject(new Error(`Failed to load image: ${file.name}`))
+        img.src = event.target.result
+      }
+      reader.onerror = () => reject(new Error(`Failed to read file: ${file.name}`))
+      reader.readAsDataURL(file)
+    })
+  }
+
+  const handleEventImageUpload = async (e) => {
+    const files = Array.from(e.target.files || [])
+    if (files.length === 0) return
+
+    // Validate all files first
+    const invalidFiles = files.filter(file => !file.type.startsWith('image/'))
+    if (invalidFiles.length > 0) {
+      setEventDetailsMessage({ type: 'error', text: `Please select valid image files. ${invalidFiles.length} file(s) are not images.` })
+      setTimeout(() => setEventDetailsMessage(null), 5000)
+      e.target.value = ''
+      return
+    }
+
+    const oversizedFiles = files.filter(file => file.size > MAX_BACKGROUND_IMAGE_SIZE)
+    if (oversizedFiles.length > 0) {
+      setEventDetailsMessage({ type: 'error', text: `Some images are too large. ${oversizedFiles.length} file(s) exceed 10MB limit.` })
+      setTimeout(() => setEventDetailsMessage(null), 5000)
+      e.target.value = ''
+      return
+    }
+
+    try {
+      setEventDetailsMessage(null)
+      const currentImages = eventDetailsForm.images || []
+      const newImages = []
+
+      // Process files sequentially
+      for (const file of files) {
+        try {
+          // Compress and convert to base64
+          const imageData = await compressEventImage(file)
+          
+          const newImage = {
+            id: `event_img_${Date.now()}_${Math.random().toString(36).substring(7)}`,
+            data: imageData,
+            addedAt: new Date().toISOString()
+          }
+          newImages.push(newImage)
+        } catch (error) {
+          logger.error(`Error processing ${file.name}:`, error)
+          setEventDetailsMessage({ type: 'error', text: `Failed to process ${file.name}. Please try again.` })
+          setTimeout(() => setEventDetailsMessage(null), 5000)
+        }
+      }
+
+      if (newImages.length > 0) {
+        setEventDetailsForm(prev => ({
+          ...prev,
+          images: [...currentImages, ...newImages]
+        }))
+        setEventDetailsMessage({ type: 'success', text: `Successfully added ${newImages.length} image${newImages.length !== 1 ? 's' : ''}!` })
+        setTimeout(() => setEventDetailsMessage(null), 3000)
+      }
+    } catch (error) {
+      logger.error('Error uploading event images:', error)
+      setEventDetailsMessage({ type: 'error', text: 'Failed to upload images' })
+      setTimeout(() => setEventDetailsMessage(null), 5000)
+    } finally {
+      e.target.value = '' // Reset file input
+    }
+  }
+
+  const handleDeleteEventImage = (imageId) => {
+    if (!window.confirm('Are you sure you want to delete this image?')) {
+      return
+    }
+
+    setEventDetailsForm(prev => ({
+      ...prev,
+      images: (prev.images || []).filter(img => img.id !== imageId)
+    }))
+    setEventDetailsMessage({ type: 'success', text: 'Image removed. Don\'t forget to save!' })
+    setTimeout(() => setEventDetailsMessage(null), 3000)
+  }
+
+  const [insertImageModal, setInsertImageModal] = useState(null) // { field, imageId }
+
+  const handleInsertImageClick = (field, imageId) => {
+    setInsertImageModal({ field, imageId })
+  }
+
+  const handleInsertImage = (field, imageId, width = null, height = null) => {
+    // Map field names to textarea IDs
+    const fieldIdMap = {
+      'description': 'admin-description',
+      'additionalInfo': 'admin-additional-info'
+    }
+    const textareaId = fieldIdMap[field] || `admin-${field}`
+    const textarea = document.getElementById(textareaId)
+    if (!textarea) {
+      logger.error(`Textarea not found: ${textareaId}`)
+      return
+    }
+
+    const cursorPos = textarea.selectionStart
+    const textBefore = textarea.value.substring(0, cursorPos)
+    const textAfter = textarea.value.substring(textarea.selectionEnd)
+    
+    // Build image placeholder with optional size
+    let imagePlaceholder = `[IMAGE:${imageId}`
+    if (width || height) {
+      imagePlaceholder += `:${width || 'auto'}:${height || 'auto'}`
+    }
+    imagePlaceholder += ']'
+    
+    const newText = textBefore + imagePlaceholder + textAfter
+
+    handleEventDetailsInputChange(field, newText)
+
+    // Restore cursor position after the inserted image
+    setTimeout(() => {
+      textarea.focus()
+      const newCursorPos = cursorPos + imagePlaceholder.length
+      textarea.setSelectionRange(newCursorPos, newCursorPos)
+    }, 0)
+
+    setInsertImageModal(null)
   }
 
   const handleDeleteRSVP = (rsvpId) => {
@@ -837,13 +1007,35 @@ function Admin({ rsvps, menuCategories, tablesCount, seatsPerTable, tablePositio
                 <h4>Event Description</h4>
                 <div className="form-group">
                   <label htmlFor="admin-description">Description</label>
-                  <textarea
-                    id="admin-description"
-                    value={eventDetailsForm.description}
-                    onChange={(e) => handleEventDetailsInputChange('description', e.target.value)}
-                    placeholder="Tell guests about the event..."
-                    rows={5}
-                  />
+                  <div className="textarea-with-images">
+                    <textarea
+                      id="admin-description"
+                      value={eventDetailsForm.description}
+                      onChange={(e) => handleEventDetailsInputChange('description', e.target.value)}
+                      placeholder="Tell guests about the event... Use [IMAGE:image-id] or [IMAGE:image-id:width:height] to embed images."
+                      rows={5}
+                    />
+                    {eventDetailsForm.images && eventDetailsForm.images.length > 0 && (
+                      <div className="insert-image-panel">
+                        <span className="insert-image-label">Insert image:</span>
+                        <div className="insert-image-buttons">
+                          {eventDetailsForm.images.map((image) => (
+                            <button
+                              key={image.id}
+                              type="button"
+                              className="insert-image-button"
+                              onClick={() => handleInsertImageClick('description', image.id)}
+                              title={`Insert ${image.id}`}
+                            >
+                              <img src={image.data} alt="Insert" className="insert-image-thumbnail" />
+                              <span className="insert-image-id">{image.id}</span>
+                            </button>
+                          ))}
+                        </div>
+                      </div>
+                    )}
+                  </div>
+                  <p className="form-help">Use [IMAGE:image-id] to embed images inline, or [IMAGE:image-id:width:height] for custom sizes. Click an image thumbnail above to insert it at your cursor position.</p>
                 </div>
               </div>
 
@@ -887,14 +1079,85 @@ function Admin({ rsvps, menuCategories, tablesCount, seatsPerTable, tablePositio
                 </div>
                 <div className="form-group">
                   <label htmlFor="admin-additional-info">Additional Information</label>
-                  <textarea
-                    id="admin-additional-info"
-                    value={eventDetailsForm.additionalInfo}
-                    onChange={(e) => handleEventDetailsInputChange('additionalInfo', e.target.value)}
-                    placeholder="Any other important information for guests..."
-                    rows={4}
-                  />
+                  <div className="textarea-with-images">
+                    <textarea
+                      id="admin-additional-info"
+                      value={eventDetailsForm.additionalInfo}
+                      onChange={(e) => handleEventDetailsInputChange('additionalInfo', e.target.value)}
+                      placeholder="Any other important information for guests... Use [IMAGE:image-id] or [IMAGE:image-id:width:height] to embed images."
+                      rows={4}
+                    />
+                    {eventDetailsForm.images && eventDetailsForm.images.length > 0 && (
+                      <div className="insert-image-panel">
+                        <span className="insert-image-label">Insert image:</span>
+                        <div className="insert-image-buttons">
+                          {eventDetailsForm.images.map((image) => (
+                            <button
+                              key={image.id}
+                              type="button"
+                              className="insert-image-button"
+                              onClick={() => handleInsertImageClick('additionalInfo', image.id)}
+                              title={`Insert ${image.id}`}
+                            >
+                              <img src={image.data} alt="Insert" className="insert-image-thumbnail" />
+                              <span className="insert-image-id">{image.id}</span>
+                            </button>
+                          ))}
+                        </div>
+                      </div>
+                    )}
+                  </div>
+                  <p className="form-help">Use [IMAGE:image-id] to embed images inline, or [IMAGE:image-id:width:height] for custom sizes. Click an image thumbnail above to insert it at your cursor position.</p>
                 </div>
+              </div>
+
+              <div className="form-section">
+                <div className="form-section-header-with-toggle">
+                  <h4>Event Images</h4>
+                  <label className="toggle-switch">
+                    <input
+                      type="checkbox"
+                      checked={eventDetailsForm.showImages !== false}
+                      onChange={(e) => handleEventDetailsInputChange('showImages', e.target.checked)}
+                    />
+                    <span className="toggle-slider"></span>
+                    <span className="toggle-label">{eventDetailsForm.showImages !== false ? 'Visible' : 'Hidden'}</span>
+                  </label>
+                </div>
+                <p className="form-help">Add images to display on the Event Details page. Images are automatically compressed and resized. Toggle to show/hide the images section.</p>
+                <div className="form-group">
+                  <label htmlFor="event-image-upload" className="event-image-upload-label">
+                    <input
+                      type="file"
+                      id="event-image-upload"
+                      accept="image/*"
+                      multiple
+                      onChange={handleEventImageUpload}
+                      style={{ display: 'none' }}
+                    />
+                    <span className="event-image-upload-button">
+                      📷 Upload Images
+                    </span>
+                  </label>
+                </div>
+                {eventDetailsForm.images && eventDetailsForm.images.length > 0 && (
+                  <div className="event-images-grid">
+                    {eventDetailsForm.images.map((image) => (
+                      <div key={image.id} className="event-image-item">
+                        <img src={image.data} alt="Event" className="event-image-preview" />
+                        <div className="event-image-id-label">{image.id}</div>
+                        <button
+                          type="button"
+                          className="event-image-delete-button"
+                          onClick={() => handleDeleteEventImage(image.id)}
+                          title="Delete image"
+                        >
+                          ×
+                        </button>
+                      </div>
+                    ))}
+                  </div>
+                )}
               </div>
 
               <div className="form-actions">
@@ -903,6 +1166,109 @@ function Admin({ rsvps, menuCategories, tablesCount, seatsPerTable, tablePositio
                 </button>
               </div>
             </form>
+
+            {/* Image Size Selection Modal */}
+            {insertImageModal && (
+              <div className="image-size-modal-overlay" onClick={() => setInsertImageModal(null)}>
+                <div className="image-size-modal" onClick={(e) => e.stopPropagation()}>
+                  <h4>Insert Image: {insertImageModal.imageId}</h4>
+                  <p className="form-help">Choose image size (leave empty for auto/default size)</p>
+                  <div className="image-size-form">
+                    <div className="form-group">
+                      <label htmlFor="image-width">Width (px or %)</label>
+                      <input
+                        type="text"
+                        id="image-width"
+                        placeholder="e.g., 500, 50%, or leave empty"
+                        onKeyDown={(e) => {
+                          if (e.key === 'Enter') {
+                            const width = e.target.value || null
+                            const heightInput = document.getElementById('image-height')
+                            const height = heightInput?.value || null
+                            handleInsertImage(insertImageModal.field, insertImageModal.imageId, width, height)
+                          }
+                        }}
+                      />
+                    </div>
+                    <div className="form-group">
+                      <label htmlFor="image-height">Height (px or %)</label>
+                      <input
+                        type="text"
+                        id="image-height"
+                        placeholder="e.g., 300, 30%, or leave empty"
+                        onKeyDown={(e) => {
+                          if (e.key === 'Enter') {
+                            const height = e.target.value || null
+                            const widthInput = document.getElementById('image-width')
+                            const width = widthInput?.value || null
+                            handleInsertImage(insertImageModal.field, insertImageModal.imageId, width, height)
+                          }
+                        }}
+                      />
+                    </div>
+                    <div className="quick-size-buttons">
+                      <button
+                        type="button"
+                        className="quick-size-button"
+                        onClick={() => handleInsertImage(insertImageModal.field, insertImageModal.imageId, null, null)}
+                      >
+                        Default Size
+                      </button>
+                      <button
+                        type="button"
+                        className="quick-size-button"
+                        onClick={() => handleInsertImage(insertImageModal.field, insertImageModal.imageId, '100%', null)}
+                      >
+                        Full Width
+                      </button>
+                      <button
+                        type="button"
+                        className="quick-size-button"
+                        onClick={() => handleInsertImage(insertImageModal.field, insertImageModal.imageId, '50%', null)}
+                      >
+                        Half Width
+                      </button>
+                      <button
+                        type="button"
+                        className="quick-size-button"
+                        onClick={() => handleInsertImage(insertImageModal.field, insertImageModal.imageId, '300', '300')}
+                      >
+                        Small (300x300)
+                      </button>
+                      <button
+                        type="button"
+                        className="quick-size-button"
+                        onClick={() => handleInsertImage(insertImageModal.field, insertImageModal.imageId, '600', '400')}
+                      >
+                        Medium (600x400)
+                      </button>
+                    </div>
+                    <div className="modal-actions">
+                      <button
+                        type="button"
+                        className="insert-button"
+                        onClick={() => {
+                          const widthInput = document.getElementById('image-width')
+                          const heightInput = document.getElementById('image-height')
+                          const width = widthInput?.value || null
+                          const height = heightInput?.value || null
+                          handleInsertImage(insertImageModal.field, insertImageModal.imageId, width, height)
+                        }}
+                      >
+                        Insert Image
+                      </button>
+                      <button
+                        type="button"
+                        className="cancel-button"
+                        onClick={() => setInsertImageModal(null)}
+                      >
+                        Cancel
+                      </button>
+                    </div>
+                  </div>
+                </div>
+              </div>
+            )}
           </div>
         )}
         {activeTab === 'feedback' && (

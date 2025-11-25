@@ -86,6 +86,8 @@ function App() {
   
   // Refs to track if updates are from WebSocket (to prevent infinite save loops)
   const isUpdatingFromWebSocket = useRef(false)
+  // Track if initial data load was successful (prevents saving empty array after failed load)
+  const initialLoadSuccessful = useRef(false)
 
   // Load initial data from API
   useEffect(() => {
@@ -102,6 +104,9 @@ function App() {
           fetchEventDetails().catch(() => null)
         ])
 
+        // Mark initial load as successful only if we got valid data
+        // This prevents saving empty array if the API call failed
+        initialLoadSuccessful.current = true
         setRsvps(rsvpsData)
         if (menuData) {
           const normalizedMenu = normalizeMenuData(menuData)
@@ -241,6 +246,12 @@ function App() {
   useEffect(() => {
     // Skip if we're still loading initial data
     if (loading) return
+    
+    // Skip if initial load wasn't successful (prevents saving empty array after failed load)
+    if (!initialLoadSuccessful.current) {
+      logger.debug('Skipping RSVP save - initial load was not successful')
+      return
+    }
     
     // Skip if this update came from WebSocket
     if (isUpdatingFromWebSocket.current) {

@@ -263,7 +263,7 @@ const scheduleBackups = () => {
   const backupInterval = BACKUP_INTERVAL_HOURS * 60 * 60 * 1000; // Convert hours to milliseconds
   
   // Files to backup
-  const filesToBackup = ['rsvps.json', 'framies.json', 'liftshares.json', 'awards.json', 'background-images.json'];
+  const filesToBackup = ['rsvps.json', 'menu.json', 'framies.json', 'liftshares.json', 'awards.json', 'background-images.json'];
   
   // Create initial backup on startup
   logger.info('Creating initial backup...');
@@ -321,8 +321,19 @@ app.put('/api/rsvps', async (req, res) => {
     const savedRsvps = await readModifyWriteJSONFile('rsvps.json', (currentRsvps) => {
       const existingRsvps = currentRsvps || [];
       
-      // Server-side validation: Check for seat conflicts
-      // First, build a map of existing seat assignments
+      // CRITICAL FIX: Merge incoming RSVPs with existing ones instead of replacing
+      // This prevents data loss when multiple users are updating simultaneously
+      
+      // Build a map of existing RSVPs by email (case-insensitive) for efficient lookup
+      const existingRsvpMap = new Map();
+      for (const rsvp of existingRsvps) {
+        if (rsvp.email) {
+          const emailKey = rsvp.email.toLowerCase();
+          existingRsvpMap.set(emailKey, rsvp);
+        }
+      }
+      
+      // Build a map of existing seat assignments for conflict detection
       const seatMap = new Map();
       for (const rsvp of existingRsvps) {
         if (rsvp.table && rsvp.seat) {
@@ -336,8 +347,9 @@ app.put('/api/rsvps', async (req, res) => {
       if (seatingLocked) {
         // Check if any RSVP is trying to change or add a seat assignment
         for (const rsvp of rsvps) {
-          if (rsvp.table && rsvp.seat) {
-            const existing = existingRsvps.find(r => r.email === rsvp.email);
+          if (rsvp.table && rsvp.seat && rsvp.email) {
+            const emailKey = rsvp.email.toLowerCase();
+            const existing = existingRsvpMap.get(emailKey);
             // If this is a new seat assignment or a change to existing seat
             if (!existing || existing.table !== rsvp.table || existing.seat !== rsvp.seat) {
               throw new Error('Seating plan is currently locked. Seat changes are not allowed.');
@@ -346,24 +358,73 @@ app.put('/api/rsvps', async (req, res) => {
         }
       }
       
-      // Now check new RSVPs against existing ones and within themselves
-      for (const rsvp of rsvps) {
-        if (rsvp.table && rsvp.seat) {
-          const seatKey = `${rsvp.table}-${rsvp.seat}`;
-          const existing = seatMap.get(seatKey);
+      // Process incoming RSVPs: update existing or add new ones
+      const mergedRsvps = [...existingRsvps]; // Start with all existing RSVPs
+      const processedEmails = new Set(); // Track which emails we've processed
+      
+      for (const incomingRsvp of rsvps) {
+        if (!incomingRsvp.email) {
+          logger.warn('Skipping RSVP without email:', incomingRsvp);
+          continue;
+        }
+        
+        const emailKey = incomingRsvp.email.toLowerCase();
+        const existingIndex = mergedRsvps.findIndex(r => 
+          r.email && r.email.toLowerCase() === emailKey
+        );
+        
+        // Check for seat conflicts before merging
+        if (incomingRsvp.table && incomingRsvp.seat) {
+          const seatKey = `${incomingRsvp.table}-${incomingRsvp.seat}`;
+          const seatOccupant = seatMap.get(seatKey);
           
           // Check if seat is already taken by a different person
-          if (existing && existing.email !== rsvp.email) {
-            throw new Error(`Seat conflict: Seat ${rsvp.seat} at Table ${rsvp.table} is already claimed by ${existing.name || existing.email}`);
+          if (seatOccupant && seatOccupant.email && 
+              seatOccupant.email.toLowerCase() !== emailKey) {
+            throw new Error(`Seat conflict: Seat ${incomingRsvp.seat} at Table ${incomingRsvp.table} is already claimed by ${seatOccupant.name || seatOccupant.email}`);
           }
-          
-          // Update map for duplicate detection within the new array
-          seatMap.set(seatKey, rsvp);
+        }
+        
+        if (existingIndex >= 0) {
+          // Update existing RSVP (preserve server data that client might not have)
+          // Merge strategy: incoming data takes precedence, but preserve ID and timestamps if they exist
+          mergedRsvps[existingIndex] = {
+            ...mergedRsvps[existingIndex], // Keep existing data
+            ...incomingRsvp, // Overwrite with incoming data
+            // Preserve original ID and submission time if they exist
+            id: mergedRsvps[existingIndex].id || incomingRsvp.id,
+            submittedAt: mergedRsvps[existingIndex].submittedAt || incomingRsvp.submittedAt
+          };
+        } else {
+          // Add new RSVP
+          mergedRsvps.push(incomingRsvp);
+        }
+        
+        processedEmails.add(emailKey);
+        
+        // Update seat map for duplicate detection within incoming array
+        if (incomingRsvp.table && incomingRsvp.seat) {
+          const seatKey = `${incomingRsvp.table}-${incomingRsvp.seat}`;
+          seatMap.set(seatKey, incomingRsvp);
         }
       }
       
-      // Return the new data to write
-      return rsvps;
+      // Check for duplicate seats within the merged array
+      const finalSeatMap = new Map();
+      for (const rsvp of mergedRsvps) {
+        if (rsvp.table && rsvp.seat) {
+          const seatKey = `${rsvp.table}-${rsvp.seat}`;
+          const existing = finalSeatMap.get(seatKey);
+          if (existing && existing.email && rsvp.email && 
+              existing.email.toLowerCase() !== rsvp.email.toLowerCase()) {
+            throw new Error(`Seat conflict detected: Seat ${rsvp.seat} at Table ${rsvp.table} is claimed by multiple people`);
+          }
+          finalSeatMap.set(seatKey, rsvp);
+        }
+      }
+      
+      // Return merged RSVPs (preserves all existing data + updates/adds from client)
+      return mergedRsvps;
     });
     
     // Emit real-time update to all connected clients
@@ -907,7 +968,7 @@ app.get('/api/admin/check', requireAdmin, (req, res) => {
 // Admin manual backup endpoint
 app.post('/api/admin/backup', requireAdmin, async (req, res) => {
   try {
-    const filesToBackup = ['rsvps.json', 'framies.json', 'liftshares.json', 'awards.json', 'background-images.json'];
+    const filesToBackup = ['rsvps.json', 'menu.json', 'framies.json', 'liftshares.json', 'awards.json', 'background-images.json'];
     const backupPaths = [];
     
     for (const filename of filesToBackup) {
